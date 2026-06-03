@@ -3,3 +3,4 @@ __pycache__/
 models/
 .claude/
 .env
+avatar_demo/build/
