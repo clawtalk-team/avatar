@@ -232,6 +232,8 @@ def write_demo_html(sentences: list[dict], svgs: dict[str, str], out_path: Path)
   .sub{{font-size:12px;color:#555;margin-bottom:20px}}
   .stage{{width:320px;height:320px;background:#1a1a1a;border-radius:18px;overflow:hidden;position:relative;border:1px solid #2a2a2a;flex-shrink:0}}
   .stage svg{{width:100%;height:100%;position:absolute;top:0;left:0;display:none}}
+  #blink-overlay{{display:block;width:100%;height:100%;position:absolute;top:0;left:0;pointer-events:none;z-index:10}}
+  .eyelid{{transform-origin:top center;transform:scaleY(0);transition:transform 0s}}
   .vis-label{{margin-top:12px;font-size:26px;font-weight:700;color:#7cf;min-height:34px;letter-spacing:1px}}
   .ph-label{{font-size:12px;color:#555;margin-top:3px;min-height:18px;font-family:monospace}}
   .sent-list{{display:flex;flex-direction:column;gap:6px;margin:16px 0;width:100%;max-width:500px}}
@@ -258,7 +260,18 @@ def write_demo_html(sentences: list[dict], svgs: dict[str, str], out_path: Path)
 <h1>ClaWTalk SVG Viseme Demo</h1>
 <p class="sub">Deepgram TTS + word-aligned phonemes · 15 visemes · Claude-generated faces</p>
 
-<div class="stage" id="stage"></div>
+<div class="stage" id="stage">
+  <!-- Blink overlay: skin-coloured ellipses exactly matching the eye-white ellipses.
+       Animate ry from 0→28 to close the eye. No transforms needed. -->
+  <svg id="blink-overlay" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+    <!-- Left eyelid (matches eye white at cx=210 cy=240 rx=30 ry=28) -->
+    <ellipse id="lid-l" cx="210" cy="240" rx="30" ry="0"
+             fill="#F5C4A1" stroke="#3D2B1F" stroke-width="2"/>
+    <!-- Right eyelid (matches eye white at cx=302 cy=240 rx=30 ry=28) -->
+    <ellipse id="lid-r" cx="302" cy="240" rx="30" ry="0"
+             fill="#F5C4A1" stroke="#3D2B1F" stroke-width="2"/>
+  </svg>
+</div>
 
 <div class="vis-label" id="vis-label">sil</div>
 <div class="ph-label" id="ph-label">ready</div>
@@ -378,6 +391,33 @@ function loadSentence(i) {{
 
 // Auto-load first sentence on page load
 loadSentence(0);
+
+// ── Blink animation ──────────────────────────────────────────────────────────
+// Simple: just animate ry of the eyelid ellipses from 0 (open) → 28 (closed).
+const lidL = document.getElementById('lid-l');
+const lidR = document.getElementById('lid-r');
+
+function setLids(ry) {{
+  if (lidL) lidL.setAttribute('ry', ry);
+  if (lidR) lidR.setAttribute('ry', ry);
+}}
+
+function blink() {{
+  // Ease ry from 0 → 28 → 0 over ~200ms
+  const EYE_RY = 28;
+  const steps = [0, 7, 14, 21, 28, 28, 21, 14, 7, 0];
+  const stepMs = 20; // 20ms per step → 200ms total blink
+  steps.forEach((ry, i) => setTimeout(() => setLids(ry), i * stepMs));
+  const blinkDone = steps.length * stepMs;
+  // Schedule next blink: 4–9 seconds
+  const next = 4000 + Math.random() * 5000;
+  setTimeout(() => {{
+    blink();
+    if (Math.random() < 0.25) setTimeout(blink, 250); // occasional double-blink
+  }}, blinkDone + next);
+}}
+
+setTimeout(blink, 1000 + Math.random() * 2000);
 </script>
 </body></html>"""
 
