@@ -55,7 +55,9 @@
 <body>
 
 <h1>Viseme Animation Demo</h1>
-<p class="sentence">"Hello, how are you today?"</p>
+<p class="sentence" id="sentence-text">"Hello, how are you today?"</p>
+
+<audio id="audio" preload="auto"></audio>
 
 <div id="avatar-wrap">
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
@@ -198,7 +200,7 @@
 <div id="viseme-badge">sil</div>
 
 <div class="controls">
-  <button id="play-btn">&#9646;&#9646; Pause</button>
+  <button id="play-btn">&#9654; Play</button>
   <div class="speed-group">
     <button data-speed="0.5">0.5&times;</button>
     <button data-speed="1" class="active">1&times;</button>
@@ -211,6 +213,7 @@
 <p class="grid-title">All 15 visemes</p>
 <div class="grid" id="grid"></div>
 
+<script src="outputs/lipsync/lipsync_data.js"></script>
 <script>
 const VISEMES = [
   { id: 'sil', phones: 'silence' }, { id: 'PP',  phones: 'p b m'   },
@@ -223,78 +226,86 @@ const VISEMES = [
   { id: 'U',   phones: 'oo uw'   },
 ];
 
-const BASE_SEQ = [
-  ['sil',0,80],['E',80,90],['nn',170,80],['O',250,110],
-  ['sil',360,90],['CH',450,80],['aa',530,110],['U',640,80],
-  ['sil',720,80],['aa',800,100],['RR',900,100],
-  ['sil',1000,80],['I',1080,80],['U',1160,120],
-  ['sil',1280,90],['DD',1370,70],['U',1440,80],
-  ['DD',1520,70],['E',1590,100],['I',1690,80],
-  ['sil',1770,300],
-];
+// Real timeline from lipsync pipeline (falls back to empty)
+const TIMELINE = window.LIPSYNC_DATA ? window.LIPSYNC_DATA.timeline : [];
+
+// Wire up audio + sentence from pipeline output
+const audio = document.getElementById('audio');
+if (window.LIPSYNC_DATA) {
+  audio.src = window.LIPSYNC_DATA.audio;
+  document.getElementById('sentence-text').textContent =
+    '\u201c' + window.LIPSYNC_DATA.sentence + '\u201d';
+}
 
 // Mouth SVG fragments — baked in, no network request needed
 const MOUTH = {"sil": "<path d=\"M 202.0,340.0 C 232.2,332.0 224.2,326.0 256.0,333.0 C 287.8,326.0 279.8,332.0 310.0,340.0 C 291.9,340.0 220.1,340.0 202.0,340.0 Z\" fill=\"#D4806A\" stroke=\"#2A1A0A\" stroke-width=\"2\" stroke-linejoin=\"round\"/><path d=\"M 202.0,340.0 C 220.1,340.0 291.9,340.0 310.0,340.0 C 279.8,352.0 232.2,352.0 202.0,340.0 Z\" fill=\"#C06050\" stroke=\"#2A1A0A\" stroke-width=\"2\" stroke-linejoin=\"round\"/><ellipse cx=\"256\" cy=\"333.0\" rx=\"21.6\" ry=\"3\" fill=\"white\" fill-opacity=\"0.30\"/>", "PP": "<path d=\"M 202.0,340.0 C 232.2,332.8 224.2,326.8 256.0,333.8 C 287.8,326.8 279.8,332.8 310.0,340.0 C 291.9,340.8 220.1,340.8 202.0,340.0 Z\" fill=\"#D4806A\" stroke=\"#2A1A0A\" stroke-width=\"2\" stroke-linejoin=\"round\"/><path d=\"M 202.0,340.0 C 220.1,338.8 291.9,338.8 310.0,340.0 C 279.8,350.8 232.2,350.8 202.0,340.0 Z\" fill=\"#C06050\" stroke=\"#2A1A0A\" stroke-width=\"2\" stroke-linejoin=\"round\"/><ellipse cx=\"256\" cy=\"333.8\" rx=\"21.6\" ry=\"3\" fill=\"white\" fill-opacity=\"0.30\"/>", "FF": "<path d=\"M 205.1,340.9 C 227.5,337.3 284.5,337.3 306.9,340.9 C 284.5,344.5 227.5,344.5 205.1,340.9 Z\" fill=\"#1A0A08\" fill-opacity=\"-0.06\"/><path d=\"M 211.1,338.3 C 242.5,336.3 269.5,336.3 300.9,338.3 L 300.9,341.5 C 269.5,343.5 242.5,343.5 211.1,341.5 Z\" fill=\"#F5F0E8\"/><path d=\"M 205.1,339.1 C 233.6,329.3 225.6,323.3 256.0,330.3 C 286.4,323.3 278.4,329.3 306.9,339.1 C 289.8,337.3 222.2,337.3 205.1,339.1 Z\" fill=\"#D4806A\" stroke=\"#2A1A0A\" stroke-width=\"2\" stroke-linejoin=\"round\"/><path d=\"M 205.1,339.1 C 222.2,344.5 289.8,344.5 306.9,339.1 C 278.4,356.5 233.6,356.5 205.1,339.1 Z\" fill=\"#C06050\" stroke=\"#2A1A0A\" stroke-width=\"2\" stroke-linejoin=\"round\"/><ellipse cx=\"256\" cy=\"330.3\" rx=\"20.4\" ry=\"3\" fill=\"white\" fill-opacity=\"0.30\"/>", "TH": "<path d=\"M 202.0,343.4 C 225.8,337.3 286.2,337.3 310.0,343.4 C 286.2,349.4 225.8,349.4 202.0,343.4 Z\" fill=\"#1A0A08\" fill-opacity=\"0.04\"/><path d=\"M 208.0,338.3 C 241.6,336.3 270.4,336.3 304.0,338.3 L 304.0,343.7 C 270.4,345.7 241.6,345.7 208.0,343.7 Z\" fill=\"#F5F0E8\"/><path d=\"M 256.0,339.3 L 256.0,344.1\" fill=\"none\" stroke=\"#D0CBC0\" stroke-width=\"1.2\" stroke-opacity=\"0.6\"/><path d=\"M 202.0,340.0 C 232.2,329.3 224.2,323.3 256.0,330.3 C 287.8,323.3 279.8,329.3 310.0,340.0 C 291.9,337.3 220.1,337.3 202.0,340.0 Z\" fill=\"#D4806A\" stroke=\"#2A1A0A\" stroke-width=\"2\" stroke-linejoin=\"round\"/><path d=\"M 202.0,340.0 C 220.1,349.4 291.9,349.4 310.0,340.0 C 279.8,361.4 232.2,361.4 202.0,340.0 Z\" fill=\"#C06050\" stroke=\"#2A1A0A\" stroke-width=\"2\" stroke-linejoin=\"round\"/><ellipse cx=\"256\" cy=\"330.3\" rx=\"21.6\" ry=\"3\" fill=\"white\" fill-opacity=\"0.30\"/>", "DD": "<path d=\"M 204.1,344.0 C 226.9,336.7 285.1,336.7 307.9,344.0 C 285.1,351.4 226.9,351.4 204.1,344.0 Z\" fill=\"#1A0A08\" fill-opacity=\"0.13\"/><path d=\"M 210.1,337.7 C 242.2,335.7 269.8,335.7 301.9,337.7 L 301.9,344.3 C 269.8,346.3 242.2,346.3 210.1,344.3 Z\" fill=\"#F5F0E8\"/><path d=\"M 256.0,338.7 L 256.0,344.6\" fill=\"none\" stroke=\"#D0CBC0\" stroke-width=\"1.2\" stroke-opacity=\"0.6\"/><path d=\"M 204.1,339.4 C 233.1,328.7 225.1,322.7 256.0,329.7 C 286.9,322.7 278.9,328.7 307.9,339.4 C 290.5,336.7 221.5,336.7 204.1,339.4 Z\" fill=\"#D4806A\" stroke=\"#2A1A0A\" stroke-width=\"2\" stroke-linejoin=\"round\"/><path d=\"M 204.1,339.4 C 221.5,351.4 290.5,351.4 307.9,339.4 C 278.9,363.4 233.1,363.4 204.1,339.4 Z\" fill=\"#C06050\" stroke=\"#2A1A0A\" stroke-width=\"2\" stroke-linejoin=\"round\"/><ellipse cx=\"256\" cy=\"329.7\" rx=\"20.8\" ry=\"3\" fill=\"white\" fill-opacity=\"0.30\"/>", "kk": "<path d=\"M 202.0,345.8 C 225.8,337.8 286.2,337.8 310.0,345.8 C 286.2,353.9 225.8,353.9 202.0,345.8 Z\" fill=\"#1A0A08\" fill-opacity=\"0.22\"/><path d=\"M 208.0,338.8 C 241.6,336.8 270.4,336.8 304.0,338.8 L 304.0,346.0 C 270.4,348.0 241.6,348.0 208.0,346.0 Z\" fill=\"#F5F0E8\"/><path d=\"M 256.0,339.8 L 256.0,346.2\" fill=\"none\" stroke=\"#D0CBC0\" stroke-width=\"1.2\" stroke-opacity=\"0.6\"/><path d=\"M 202.0,340.0 C 232.2,329.8 224.2,323.8 256.0,330.8 C 287.8,323.8 279.8,329.8 310.0,340.0 C 291.9,337.8 220.1,337.8 202.0,340.0 Z\" fill=\"#D4806A\" stroke=\"#2A1A0A\" stroke-width=\"2\" stroke-linejoin=\"round\"/><path d=\"M 202.0,340.0 C 220.1,353.9 291.9,353.9 310.0,340.0 C 279.8,365.9 232.2,365.9 202.0,340.0 Z\" fill=\"#C06050\" stroke=\"#2A1A0A\" stroke-width=\"2\" stroke-linejoin=\"round\"/><ellipse cx=\"256\" cy=\"330.8\" rx=\"21.6\" ry=\"3\" fill=\"white\" fill-opacity=\"0.30\"/>", "CH": "<path d=\"M 194.8,345.9 C 221.7,339.6 290.3,339.6 317.2,345.9 C 290.3,352.3 221.7,352.3 194.8,345.9 Z\" fill=\"#1A0A08\" fill-opacity=\"0.07\"/><path d=\"M 200.8,340.6 C 239.4,338.6 272.6,338.6 311.2,340.6 L 311.2,346.3 C 272.6,348.3 239.4,348.3 200.8,346.3 Z\" fill=\"#F5F0E8\"/><path d=\"M 256.0,341.6 L 256.0,346.7\" fill=\"none\" stroke=\"#D0CBC0\" stroke-width=\"1.2\" stroke-opacity=\"0.6\"/><path d=\"M 194.8,342.1 C 229.1,329.8 221.1,323.8 256.0,330.8 C 290.9,323.8 282.9,329.8 317.2,342.1 C 296.6,339.6 215.4,339.6 194.8,342.1 Z\" fill=\"#D4806A\" stroke=\"#2A1A0A\" stroke-width=\"2\" stroke-linejoin=\"round\"/><path d=\"M 194.8,342.1 C 215.4,352.3 296.6,352.3 317.2,342.1 C 282.9,364.3 229.1,364.3 194.8,342.1 Z\" fill=\"#C06050\" stroke=\"#2A1A0A\" stroke-width=\"2\" stroke-linejoin=\"round\"/><ellipse cx=\"256\" cy=\"330.8\" rx=\"24.5\" ry=\"3\" fill=\"white\" fill-opacity=\"0.30\"/>", "SS": "<path d=\"M 212.3,338.6 C 231.5,335.9 280.5,335.9 299.7,338.6 C 280.5,341.3 231.5,341.3 212.3,338.6 Z\" fill=\"#1A0A08\" fill-opacity=\"-0.06\"/><path d=\"M 212.3,337.0 C 236.8,327.9 228.8,321.9 256.0,328.9 C 283.2,321.9 275.2,327.9 299.7,337.0 C 285.0,335.9 227.0,335.9 212.3,337.0 Z\" fill=\"#D4806A\" stroke=\"#2A1A0A\" stroke-width=\"2\" stroke-linejoin=\"round\"/><path d=\"M 212.3,337.0 C 227.0,341.3 285.0,341.3 299.7,337.0 C 275.2,353.3 236.8,353.3 212.3,337.0 Z\" fill=\"#C06050\" stroke=\"#2A1A0A\" stroke-width=\"2\" stroke-linejoin=\"round\"/><ellipse cx=\"256\" cy=\"328.9\" rx=\"17.5\" ry=\"3\" fill=\"white\" fill-opacity=\"0.30\"/>", "nn": "<path d=\"M 203.0,342.8 C 226.3,337.9 285.7,337.9 309.0,342.8 C 285.7,347.7 226.3,347.7 203.0,342.8 Z\" fill=\"#1A0A08\" fill-opacity=\"0.04\"/><path d=\"M 209.0,338.9 C 241.9,336.9 270.1,336.9 303.0,338.9 L 303.0,343.3 C 270.1,345.3 241.9,345.3 209.0,343.3 Z\" fill=\"#F5F0E8\"/><path d=\"M 203.0,339.7 C 232.7,329.9 224.7,323.9 256.0,330.9 C 287.3,323.9 279.3,329.9 309.0,339.7 C 291.2,337.9 220.8,337.9 203.0,339.7 Z\" fill=\"#D4806A\" stroke=\"#2A1A0A\" stroke-width=\"2\" stroke-linejoin=\"round\"/><path d=\"M 203.0,339.7 C 220.8,347.7 291.2,347.7 309.0,339.7 C 279.3,359.7 232.7,359.7 203.0,339.7 Z\" fill=\"#C06050\" stroke=\"#2A1A0A\" stroke-width=\"2\" stroke-linejoin=\"round\"/><ellipse cx=\"256\" cy=\"330.9\" rx=\"21.2\" ry=\"3\" fill=\"white\" fill-opacity=\"0.30\"/>", "RR": "<path d=\"M 196.3,346.2 C 222.5,339.4 289.5,339.4 315.7,346.2 C 289.5,353.0 222.5,353.0 196.3,346.2 Z\" fill=\"#1A0A08\" fill-opacity=\"0.13\"/><path d=\"M 202.3,340.4 C 239.9,338.4 272.1,338.4 309.7,340.4 L 309.7,346.5 C 272.1,348.5 239.9,348.5 202.3,346.5 Z\" fill=\"#F5F0E8\"/><path d=\"M 256.0,341.4 L 256.0,346.9\" fill=\"none\" stroke=\"#D0CBC0\" stroke-width=\"1.2\" stroke-opacity=\"0.6\"/><path d=\"M 196.3,341.7 C 229.7,330.0 221.7,324.0 256.0,331.0 C 290.3,324.0 282.3,330.0 315.7,341.7 C 295.7,339.4 216.3,339.4 196.3,341.7 Z\" fill=\"#D4806A\" stroke=\"#2A1A0A\" stroke-width=\"2\" stroke-linejoin=\"round\"/><path d=\"M 196.3,341.7 C 216.3,353.0 295.7,353.0 315.7,341.7 C 282.3,365.0 229.7,365.0 196.3,341.7 Z\" fill=\"#C06050\" stroke=\"#2A1A0A\" stroke-width=\"2\" stroke-linejoin=\"round\"/><ellipse cx=\"256\" cy=\"331.0\" rx=\"23.9\" ry=\"3\" fill=\"white\" fill-opacity=\"0.30\"/>", "aa": "<path d=\"M 205.1,363.2 C 227.5,331.9 284.5,331.9 306.9,363.2 C 284.5,394.5 227.5,394.5 205.1,363.2 Z\" fill=\"#1A0A08\" fill-opacity=\"0.92\"/><path d=\"M 225.4,392.5 C 222.4,366.3 289.6,366.3 286.6,392.5 C 271.3,400.5 240.7,400.5 225.4,392.5 Z\" fill=\"#C85050\" fill-opacity=\"0.90\"/><path d=\"M 211.1,332.9 C 242.5,330.9 269.5,330.9 300.9,332.9 L 300.9,361.1 C 269.5,363.1 242.5,363.1 211.1,361.1 Z\" fill=\"#F5F0E8\"/><path d=\"M 256.0,333.9 L 256.0,358.9\" fill=\"none\" stroke=\"#D0CBC0\" stroke-width=\"1.2\" stroke-opacity=\"0.6\"/><path d=\"M 205.1,339.1 C 233.6,323.9 225.6,317.9 256.0,324.9 C 286.4,317.9 278.4,323.9 306.9,339.1 C 289.8,331.9 222.2,331.9 205.1,339.1 Z\" fill=\"#D4806A\" stroke=\"#2A1A0A\" stroke-width=\"2\" stroke-linejoin=\"round\"/><path d=\"M 205.1,339.1 C 222.2,394.5 289.8,394.5 306.9,339.1 C 278.4,406.5 233.6,406.5 205.1,339.1 Z\" fill=\"#C06050\" stroke=\"#2A1A0A\" stroke-width=\"2\" stroke-linejoin=\"round\"/><ellipse cx=\"256\" cy=\"324.9\" rx=\"20.4\" ry=\"3\" fill=\"white\" fill-opacity=\"0.30\"/>", "E": "<path d=\"M 208.2,349.9 C 229.2,333.7 282.8,333.7 303.8,349.9 C 282.8,366.0 229.2,366.0 208.2,349.9 Z\" fill=\"#1A0A08\" fill-opacity=\"0.59\"/><path d=\"M 227.3,364.0 C 224.4,351.5 287.6,351.5 284.7,364.0 C 270.4,372.0 241.6,372.0 227.3,364.0 Z\" fill=\"#C85050\" fill-opacity=\"0.90\"/><path d=\"M 214.2,334.7 C 243.4,332.7 268.6,332.7 297.8,334.7 L 297.8,349.2 C 268.6,351.2 243.4,351.2 214.2,349.2 Z\" fill=\"#F5F0E8\"/><path d=\"M 256.0,335.7 L 256.0,348.6\" fill=\"none\" stroke=\"#D0CBC0\" stroke-width=\"1.2\" stroke-opacity=\"0.6\"/><path d=\"M 208.2,338.2 C 234.9,325.7 226.9,319.7 256.0,326.7 C 285.1,319.7 277.1,325.7 303.8,338.2 C 287.8,333.7 224.2,333.7 208.2,338.2 Z\" fill=\"#D4806A\" stroke=\"#2A1A0A\" stroke-width=\"2\" stroke-linejoin=\"round\"/><path d=\"M 208.2,338.2 C 224.2,366.0 287.8,366.0 303.8,338.2 C 277.1,378.0 234.9,378.0 208.2,338.2 Z\" fill=\"#C06050\" stroke=\"#2A1A0A\" stroke-width=\"2\" stroke-linejoin=\"round\"/><ellipse cx=\"256\" cy=\"326.7\" rx=\"19.1\" ry=\"3\" fill=\"white\" fill-opacity=\"0.30\"/>", "I": "<path d=\"M 213.3,338.2 C 232.1,335.8 279.9,335.8 298.7,338.2 C 279.9,340.7 232.1,340.7 213.3,338.2 Z\" fill=\"#1A0A08\" fill-opacity=\"-0.06\"/><path d=\"M 213.3,336.7 C 237.2,327.8 229.2,321.8 256.0,328.8 C 282.8,321.8 274.8,327.8 298.7,336.7 C 284.4,335.8 227.6,335.8 213.3,336.7 Z\" fill=\"#D4806A\" stroke=\"#2A1A0A\" stroke-width=\"2\" stroke-linejoin=\"round\"/><path d=\"M 213.3,336.7 C 227.6,340.7 284.4,340.7 298.7,336.7 C 274.8,352.7 237.2,352.7 213.3,336.7 Z\" fill=\"#C06050\" stroke=\"#2A1A0A\" stroke-width=\"2\" stroke-linejoin=\"round\"/><ellipse cx=\"256\" cy=\"328.8\" rx=\"17.1\" ry=\"3\" fill=\"white\" fill-opacity=\"0.30\"/>", "O": "<path d=\"M 193.8,355.4 C 221.2,337.7 290.8,337.7 318.2,355.4 C 290.8,373.1 221.2,373.1 193.8,355.4 Z\" fill=\"#1A0A08\" fill-opacity=\"0.68\"/><path d=\"M 218.7,371.1 C 214.9,357.2 297.1,357.2 293.3,371.1 C 274.7,379.1 237.3,379.1 218.7,371.1 Z\" fill=\"#C85050\" fill-opacity=\"0.90\"/><path d=\"M 199.8,338.7 C 239.1,336.7 272.9,336.7 312.2,338.7 L 312.2,354.6 C 272.9,356.6 239.1,356.6 199.8,354.6 Z\" fill=\"#F5F0E8\"/><path d=\"M 256.0,339.7 L 256.0,353.9\" fill=\"none\" stroke=\"#D0CBC0\" stroke-width=\"1.2\" stroke-opacity=\"0.6\"/><path d=\"M 193.8,342.4 C 228.6,327.7 220.6,321.7 256.0,328.7 C 291.4,321.7 283.4,327.7 318.2,342.4 C 297.3,337.7 214.7,337.7 193.8,342.4 Z\" fill=\"#D4806A\" stroke=\"#2A1A0A\" stroke-width=\"2\" stroke-linejoin=\"round\"/><path d=\"M 193.8,342.4 C 214.7,373.1 297.3,373.1 318.2,342.4 C 283.4,385.1 228.6,385.1 193.8,342.4 Z\" fill=\"#C06050\" stroke=\"#2A1A0A\" stroke-width=\"2\" stroke-linejoin=\"round\"/><ellipse cx=\"256\" cy=\"328.7\" rx=\"24.9\" ry=\"3\" fill=\"white\" fill-opacity=\"0.30\"/>", "U": "<path d=\"M 188.7,349.3 C 218.3,341.4 293.7,341.4 323.3,349.3 C 293.7,357.2 218.3,357.2 188.7,349.3 Z\" fill=\"#1A0A08\" fill-opacity=\"0.18\"/><path d=\"M 194.7,342.4 C 237.6,340.4 274.4,340.4 317.3,342.4 L 317.3,349.5 C 274.4,351.5 237.6,351.5 194.7,349.5 Z\" fill=\"#F5F0E8\"/><path d=\"M 256.0,343.4 L 256.0,349.7\" fill=\"none\" stroke=\"#D0CBC0\" stroke-width=\"1.2\" stroke-opacity=\"0.6\"/><path d=\"M 188.7,343.9 C 226.4,330.1 218.4,324.1 256.0,331.1 C 293.6,324.1 285.6,330.1 323.3,343.9 C 300.7,341.4 211.3,341.4 188.7,343.9 Z\" fill=\"#D4806A\" stroke=\"#2A1A0A\" stroke-width=\"2\" stroke-linejoin=\"round\"/><path d=\"M 188.7,343.9 C 211.3,357.2 300.7,357.2 323.3,343.9 C 285.6,369.2 226.4,369.2 188.7,343.9 Z\" fill=\"#C06050\" stroke=\"#2A1A0A\" stroke-width=\"2\" stroke-linejoin=\"round\"/><ellipse cx=\"256\" cy=\"331.1\" rx=\"26.9\" ry=\"3\" fill=\"white\" fill-opacity=\"0.30\"/>"};
 
-let speed=1, playing=true, startWall=performance.now(), accumulated=0;
-
-const totalMs = () => { const l=BASE_SEQ[BASE_SEQ.length-1]; return Math.round((l[1]+l[2])/speed); };
-const elapsedMs = () => playing ? accumulated+(performance.now()-startWall) : accumulated;
-const visemeAt = ms => {
-  for (const [id,s,d] of BASE_SEQ) {
-    const s2=Math.round(s/speed), e=Math.round((s+d)/speed);
-    if (ms>=s2 && ms<e) return id;
-  }
-  return 'sil';
-};
-
 const mouthGroup = document.getElementById('mouth-group');
 const badge      = document.getElementById('viseme-badge');
 const fill       = document.getElementById('timeline-fill');
+const playBtn    = document.getElementById('play-btn');
 
-// Build grid
-const grid=document.getElementById('grid'), cells={};
-for (const {id,phones} of VISEMES) {
-  const c=document.createElement('div');
-  c.className='grid-cell';
-  c.innerHTML=`<img src="outputs/svg_visemes/${id}.svg" alt="${id}"/><div class="name">${id}</div><div class="phones">${phones}</div>`;
-  grid.appendChild(c); cells[id]=c;
+// Build viseme grid
+const grid = document.getElementById('grid'), cells = {};
+for (const {id, phones} of VISEMES) {
+  const c = document.createElement('div');
+  c.className = 'grid-cell';
+  c.innerHTML = `<img src="outputs/svg_visemes/${id}.svg" alt="${id}"/>` +
+                `<div class="name">${id}</div><div class="phones">${phones}</div>`;
+  grid.appendChild(c); cells[id] = c;
 }
 
 // Seed initial mouth
 mouthGroup.innerHTML = MOUTH['sil'];
 let lastViseme = 'sil';
 
+function visemeAt(ms) {
+  for (const f of TIMELINE) {
+    if (ms >= f.start_ms && ms < f.end_ms) return f.viseme;
+  }
+  return 'sil';
+}
+
+function setViseme(v) {
+  if (v === lastViseme) return;
+  mouthGroup.innerHTML = MOUTH[v] || MOUTH['sil'];
+  badge.textContent = v;
+  if (cells[lastViseme]) cells[lastViseme].classList.remove('active');
+  if (cells[v])          cells[v].classList.add('active');
+  lastViseme = v;
+}
+
 function render() {
-  const ms=elapsedMs()%totalMs(), v=visemeAt(ms);
-  fill.style.width=(ms/totalMs()*100).toFixed(1)+'%';
-  if (v!==lastViseme) {
-    mouthGroup.innerHTML=MOUTH[v]||MOUTH['sil'];
-    badge.textContent=v;
-    if(cells[lastViseme]) cells[lastViseme].classList.remove('active');
-    if(cells[v])          cells[v].classList.add('active');
-    lastViseme=v;
+  const ms = audio.currentTime * 1000;
+  setViseme(visemeAt(ms));
+  if (audio.duration) {
+    fill.style.width = (audio.currentTime / audio.duration * 100).toFixed(1) + '%';
   }
   requestAnimationFrame(render);
 }
 requestAnimationFrame(render);
 
-document.getElementById('play-btn').addEventListener('click', function() {
-  if (playing) {
-    accumulated+=performance.now()-startWall; playing=false;
-    this.innerHTML='&#9654; Play';
+audio.addEventListener('ended', () => {
+  setViseme('sil');
+  fill.style.width = '0%';
+  playBtn.innerHTML = '&#9654; Play';
+});
+
+playBtn.addEventListener('click', function() {
+  if (audio.paused || audio.ended) {
+    if (audio.ended) audio.currentTime = 0;
+    audio.play();
+    this.innerHTML = '&#9646;&#9646; Pause';
   } else {
-    startWall=performance.now(); playing=true;
-    this.innerHTML='&#9646;&#9646; Pause';
+    audio.pause();
+    this.innerHTML = '&#9654; Play';
   }
 });
 
 document.querySelectorAll('.speed-group button').forEach(btn => {
   btn.addEventListener('click', () => {
-    const frac=(elapsedMs()%totalMs())/totalMs();
-    speed=parseFloat(btn.dataset.speed);
-    accumulated=frac*totalMs(); startWall=performance.now();
-    document.querySelectorAll('.speed-group button').forEach(b=>b.classList.remove('active'));
+    audio.playbackRate = parseFloat(btn.dataset.speed);
+    document.querySelectorAll('.speed-group button').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
   });
 });
