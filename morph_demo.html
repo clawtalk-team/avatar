@@ -79,6 +79,14 @@ const MOUTH_REGION_IDX = [
   175,152,148,377,176,400                                                  // chin / lower jaw
 ];
 
+// Eye-region landmarks (both eyes + brows + lids) for the blink overlay mask.
+const EYE_REGION_IDX = [
+  33,246,161,160,159,158,157,173,133,155,154,153,145,144,163,7,            // left eye ring
+  263,466,388,387,386,385,384,398,362,382,381,380,374,373,390,249,         // right eye ring
+  70,63,105,66,107,55, 336,296,334,293,300,285,                            // brows
+  230,231,232,233, 450,451,452,453                                         // under-eye lids
+];
+
 // Preference order: each viseme falls back to the nearest available generated still.
 const FALLBACK = {
   sil:['sil'], PP:['PP','sil'], FF:['FF','sil'], TH:['TH','DD','sil'], DD:['DD','nn','sil'],
@@ -90,7 +98,10 @@ const FALLBACK = {
 const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
 const mouthCv = document.createElement('canvas');   // offscreen: morphed mouth patch
 const mctx = mouthCv.getContext('2d');
-const maskCv = document.createElement('canvas');     // offscreen: feathered ellipse mask
+const maskCv = document.createElement('canvas');     // offscreen: feathered mouth mask
+const eyeCv = document.createElement('canvas');      // offscreen: blink eye patch
+const ectx = eyeCv.getContext('2d');
+const eyeMaskCv = document.createElement('canvas');  // offscreen: feathered eye mask
 let baseV = 'sil';                                   // static face shown everywhere but the mouth
 const statusEl = document.getElementById('status');
 const playBtn = document.getElementById('play');
@@ -142,8 +153,7 @@ async function build(){
     'Could not load outputs/flashimage/geometry.json — run scripts/extract_landmarks.py first.'; return; }
   SIZE = geo.size || SIZE;
   cv.width = cv.height = SIZE;
-  mouthCv.width = mouthCv.height = SIZE;
-  maskCv.width = maskCv.height = SIZE;
+  for (const c of [mouthCv, maskCv, eyeCv, eyeMaskCv]) { c.width = c.height = SIZE; }
   TRIS = geo.triangles;
   const entries = Object.entries(geo.visemes||{});
   if (!entries.length){ statusEl.textContent='No visemes in geometry.json.'; return; }
@@ -159,31 +169,32 @@ async function build(){
     octx.drawImage(im, 0,0, SIZE,SIZE);
     frames[v] = { canvas: off, pts: info.points };
   }
-  buildMask();
+  buildMask(maskCv, MOUTH_REGION_IDX, 1.28, 1.22, 0.62);
+  buildMask(eyeMaskCv, EYE_REGION_IDX, 1.14, 1.18, 0.55);
   loadedReady(Object.keys(frames));
 }
 
-// Feathered elliptical mask over the mouth region. Extent is the bounding box of
-// MOUTH_REGION_IDX across ALL visemes (so the widest open mouth still fits), padded.
-function buildMask(){
+// Feathered elliptical mask over a region. Extent is the bounding box of the given
+// landmark indices across ALL frames (so the widest pose still fits), padded.
+function buildMask(canvas, idxs, padx, pady, core){
   let minx=1e9,miny=1e9,maxx=-1e9,maxy=-1e9;
   for (const v in frames){
     const p = frames[v].pts;
-    for (const i of MOUTH_REGION_IDX){
+    for (const i of idxs){
       const q=p[i]; if(!q) continue;
       if(q[0]<minx)minx=q[0]; if(q[0]>maxx)maxx=q[0];
       if(q[1]<miny)miny=q[1]; if(q[1]>maxy)maxy=q[1];
     }
   }
   const cxp=(minx+maxx)/2, cyp=(miny+maxy)/2;
-  const rx=(maxx-minx)/2*1.28, ry=(maxy-miny)/2*1.22;
-  const m=maskCv.getContext('2d');
+  const rx=(maxx-minx)/2*padx, ry=(maxy-miny)/2*pady;
+  const m=canvas.getContext('2d');
   m.clearRect(0,0,SIZE,SIZE);
   m.save(); m.translate(cxp,cyp); m.scale(rx,ry);
   const g=m.createRadialGradient(0,0,0, 0,0,1);
   g.addColorStop(0,'rgba(255,255,255,1)');
-  g.addColorStop(0.62,'rgba(255,255,255,1)');   // solid core
-  g.addColorStop(1,'rgba(255,255,255,0)');       // feathered edge
+  g.addColorStop(core,'rgba(255,255,255,1)');    // solid core
+  g.addColorStop(1,'rgba(255,255,255,0)');        // feathered edge
   m.fillStyle=g; m.beginPath(); m.arc(0,0,1,0,7); m.fill(); m.restore();
 }
 
@@ -230,11 +241,42 @@ function paintMouth(A, B, t){
   mctx.globalCompositeOperation='source-over';
 }
 
-// One frame: static base face + feathered mouth patch composited on top.
+// ── Idle blink (wall-clock, so it blinks even when paused/idle) ────────────
+const BLINK_CLOSE=85, BLINK_OPEN=115;   // ms down / up
+let nextBlinkAt=0, blinkStart=-1;
+function blinkAlpha(){
+  if (!frames.blink) return 0;
+  const now = performance.now();
+  if (nextBlinkAt===0) nextBlinkAt = now + 1200 + Math.random()*1500;   // first blink soon
+  if (blinkStart<0 && now>=nextBlinkAt) blinkStart=now;
+  if (blinkStart>=0){
+    const e = now - blinkStart;
+    if (e <= BLINK_CLOSE) return smoothstep(e/BLINK_CLOSE);
+    if (e <= BLINK_CLOSE+BLINK_OPEN) return 1 - smoothstep((e-BLINK_CLOSE)/BLINK_OPEN);
+    blinkStart = -1;
+    // ~every 10s with randomness (8–12s), occasional quick double-blink
+    nextBlinkAt = now + (Math.random()<0.15 ? 180 : 8000 + Math.random()*4000);
+    return 0;
+  }
+  return 0;
+}
+
+// Composite the eyes-closed still over the feathered eye mask at the blink alpha.
+function paintEyes(a){
+  if (a<=0.01 || !frames.blink) return;
+  ectx.setTransform(1,0,0,1,0,0); ectx.clearRect(0,0,SIZE,SIZE);
+  ectx.globalAlpha=1; ectx.drawImage(frames.blink.canvas,0,0);
+  ectx.globalCompositeOperation='destination-in'; ectx.drawImage(eyeMaskCv,0,0);
+  ectx.globalCompositeOperation='source-over';
+  ctx.globalAlpha=a; ctx.drawImage(eyeCv,0,0); ctx.globalAlpha=1;
+}
+
+// One frame: static base face + blink eye patch + feathered mouth patch on top.
 function frame(A, B, t){
   ctx.setTransform(1,0,0,1,0,0); ctx.globalAlpha=1;
   ctx.clearRect(0,0,SIZE,SIZE);
   ctx.drawImage(frames[baseV].canvas,0,0);   // static neutral face — never jitters
+  paintEyes(blinkAlpha());                    // idle blink, independent of audio
   paintMouth(A, B, t);
   ctx.drawImage(mouthCv,0,0);
 }

@@ -74,6 +74,13 @@ VISEME_MOUTHS = {
 
 VISEME_ORDER = list(VISEME_MOUTHS.keys())
 
+# Non-viseme edits (idle motion). Same identity-lock trick, different region.
+EXTRA_EDITS = {
+    "blink": ("eyes",
+              "both eyes fully closed with the eyelids gently shut, as in the middle of a "
+              "natural blink — relaxed lids, not squeezed"),
+}
+
 
 def load_api_key() -> str:
     key = os.environ.get("OPENROUTER_API_KEY")
@@ -169,22 +176,36 @@ def main() -> None:
     if base_only:
         return
 
+    common = (
+        f"Edit the provided portrait. Keep the EXACT same person as {CHARACTER} — "
+        "identical face shape, hairstyle, skin tone and texture, camera angle, head "
+        "position, framing, lighting, and plain gray background. "
+    )
     manifest = {"base": "base.png", "visemes": {}}
     for v in targets:
-        if v not in VISEME_MOUTHS:
-            print(f"[skip] unknown viseme '{v}'")
+        if v in VISEME_MOUTHS:
+            desc = VISEME_MOUTHS[v]
+            prompt = (
+                common +
+                "Keep the eyes and eyebrows exactly as in the base. "
+                f"Change ONLY the mouth and jaw so the mouth shows: {desc}. "
+                "Keep a calm neutral expression with relaxed eyebrows and normal eyes — "
+                "do NOT raise the eyebrows or widen the eyes. "
+                "Do not change anything else. Front-facing, looking straight at the camera."
+            )
+        elif v in EXTRA_EDITS:
+            _region, desc = EXTRA_EDITS[v]
+            prompt = (
+                common +
+                "Keep the mouth exactly as in the base (gently closed). "
+                f"Change ONLY the {_region} so that: {desc}. "
+                "Do not change anything else. Front-facing, looking straight at the camera."
+            )
+        else:
+            print(f"[skip] unknown target '{v}'")
             continue
         out = OUT_DIR / f"{v}.png"
-        prompt = (
-            f"Edit the provided portrait. Keep the EXACT same person as {CHARACTER} — "
-            "identical face shape, hairstyle, skin tone and texture, eyes, eyebrows, "
-            "camera angle, head position, framing, lighting, and plain gray background. "
-            f"Change ONLY the mouth and jaw so the mouth shows: {VISEME_MOUTHS[v]}. "
-            "Keep a calm neutral expression with relaxed eyebrows and normal eyes — "
-            "do NOT raise the eyebrows or widen the eyes. "
-            "Do not change anything else. Front-facing, looking straight at the camera."
-        )
-        print(f"[{v}] editing base -> {VISEME_MOUTHS[v][:48]}...")
+        print(f"[{v}] editing base -> {desc[:48]}...")
         png = generate(prompt, api_key, input_png=base_png)
         out.write_bytes(png)
         manifest["visemes"][v] = f"{v}.png"

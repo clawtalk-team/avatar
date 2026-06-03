@@ -269,7 +269,10 @@ generates its own audio and can't be driven by our timeline), no RunPod pod.
    mouth (per-triangle affine warp + cross-dissolve of prev→cur viseme) clipped to the mask
    via `destination-in`. The mask extent is the bounding box of the mouth/jaw landmarks across
    all visemes, so an open jaw still fits. Missing visemes fall back to the nearest generated
-   mouth shape, so the demo runs end-to-end at any coverage level.
+   mouth shape, so the demo runs end-to-end at any coverage level. **Idle blink:** a
+   second eyes-closed still (`blink.png`) is composited the same way through a feathered
+   eye-region mask, driven by a wall-clock timer (~10s ± randomness, occasional double-blink)
+   so the avatar blinks even when paused/idle — independent of the audio timeline.
 
 **Result:** All 15 visemes generate with consistent identity; the open-mouth interior
 (teeth/tongue) that pure morphing can't invent comes from the target still via the
@@ -437,6 +440,7 @@ open demo.html
 
 # Flash Image + MediaPipe morph demo
 python scripts/flashimage_generate.py                 # generate 15 viseme stills (~$0.60)
+python scripts/flashimage_generate.py blink           # eyes-closed still for the idle blink
 uv venv --python 3.12 .venv-landmarks                 # MediaPipe needs Python <=3.12
 uv pip install --python .venv-landmarks/bin/python mediapipe opencv-python-headless numpy scipy
 .venv-landmarks/bin/python scripts/extract_landmarks.py
