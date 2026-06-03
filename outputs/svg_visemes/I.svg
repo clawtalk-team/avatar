@@ -1,0 +1,150 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <radialGradient id="skinGrad" cx="45%" cy="38%" r="58%">
+      <stop offset="0%"   stop-color="#FDD8BC"/>
+      <stop offset="65%"  stop-color="#F5C5A3"/>
+      <stop offset="100%" stop-color="#E8A87C"/>
+    </radialGradient>
+    <radialGradient id="hairGrad" cx="40%" cy="30%" r="60%">
+      <stop offset="0%"   stop-color="#7A5030"/>
+      <stop offset="100%" stop-color="#3A2010"/>
+    </radialGradient>
+    <radialGradient id="cheekL" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#F0A898" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#F0A898" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="cheekR" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#F0A898" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#F0A898" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="#00000028"/>
+    </filter>
+    <!-- Clip: show hair ellipse only ABOVE the hairline -->
+    <clipPath id="hairClip">
+      <rect x="0" y="0" width="512" height="154.0"/>
+    </clipPath>
+    <!-- Clip: show hair sides (below hairline, outside face oval) -->
+    <clipPath id="hairSideClip">
+      <rect x="0" y="154.0" width="512" height="358.0"/>
+    </clipPath>
+    <clipPath id="headClip">
+      <ellipse cx="256" cy="262" rx="151" ry="195"/>
+    </clipPath>
+  </defs>
+
+  <!-- Background -->
+  <rect width="512" height="512" fill="#F0EDE8"/>
+
+  <!-- Neck (behind everything) -->
+  <rect x="218" y="432" width="76" height="85"
+        rx="20" fill="#F5C5A3" stroke="#2A1A0A" stroke-width="2.5"/>
+
+  <!-- Ears (behind head) -->
+  <ellipse cx="116" cy="250" rx="15" ry="24"
+           fill="#F5C5A3" stroke="#2A1A0A" stroke-width="2.5"/>
+  <ellipse cx="396" cy="250" rx="15" ry="24"
+           fill="#F5C5A3" stroke="#2A1A0A" stroke-width="2.5"/>
+
+  <!-- Hair bulk: full ellipse clipped to above hairline (top of head + volume) -->
+  <ellipse cx="256" cy="214.0" rx="164" ry="214"
+           fill="url(#hairGrad)" clip-path="url(#hairClip)"/>
+
+  <!-- Hair sides: small sideburn strips below hairline, outside face oval -->
+  <!-- Left sideburn -->
+  <ellipse cx="112" cy="182.0"
+           rx="18" ry="32"
+           fill="url(#hairGrad)" clip-path="url(#hairSideClip)"/>
+  <!-- Right sideburn -->
+  <ellipse cx="400" cy="182.0"
+           rx="18" ry="32"
+           fill="url(#hairGrad)" clip-path="url(#hairSideClip)"/>
+
+  <!-- Hair highlight (sheen on top) -->
+  <ellipse cx="236" cy="30.0" rx="38" ry="14"
+           fill="white" fill-opacity="0.14" clip-path="url(#hairClip)"/>
+
+  <!-- Hair texture lines (subtle strands) -->
+  <g stroke="#2A1408" stroke-width="1.4" stroke-linecap="round" fill="none"
+     stroke-opacity="0.35" clip-path="url(#hairClip)">
+    <path d="M 206,8.0 Q 226,40.0 196,144.0"/>
+    <path d="M 256,5.0      Q 266,50.0 246,146.0"/>
+    <path d="M 306,8.0 Q 286,40.0 311,144.0"/>
+  </g>
+
+  <!-- Head oval (face skin) — drawn over the hair bottom edge to form clean hairline -->
+  <ellipse cx="256" cy="262" rx="148" ry="192"
+           fill="url(#skinGrad)" stroke="#2A1A0A" stroke-width="3"
+           filter="url(#softShadow)"/>
+
+  <!-- Hair outline stroke along hairline (crisp edge between hair and forehead) -->
+  <!-- This is just the top arc of the head ellipse, traced in hair colour -->
+  <ellipse cx="256" cy="262" rx="148" ry="192"
+           fill="none" stroke="#5C3A1E" stroke-width="2.5"
+           stroke-dasharray="1000"
+           stroke-dashoffset="587"
+           clip-path="url(#hairClip)"/>
+
+  <!-- Eyebrows -->
+  <path d="M 176,176
+            Q 200,168
+              216,178"
+        fill="none" stroke="#5C3A1E" stroke-width="5" stroke-linecap="round"/>
+  <path d="M 296,178
+            Q 312,168
+              336,176"
+        fill="none" stroke="#5C3A1E" stroke-width="5" stroke-linecap="round"/>
+
+  <!-- Eyes: whites -->
+  <ellipse cx="196" cy="212" rx="28" ry="24"
+           fill="#FFFFFF" stroke="#2A1A0A" stroke-width="2.5"/>
+  <ellipse cx="316" cy="212" rx="28" ry="24"
+           fill="#FFFFFF" stroke="#2A1A0A" stroke-width="2.5"/>
+
+  <!-- Irises -->
+  <circle cx="196" cy="212" r="14"
+          fill="#6B4C2A" stroke="#2A1A0A" stroke-width="1.5"/>
+  <circle cx="316" cy="212" r="14"
+          fill="#6B4C2A" stroke="#2A1A0A" stroke-width="1.5"/>
+
+  <!-- Pupils -->
+  <circle cx="196" cy="212" r="7" fill="#1A1A1A"/>
+  <circle cx="316" cy="212" r="7" fill="#1A1A1A"/>
+
+  <!-- Eye highlights -->
+  <circle cx="202" cy="206" r="4" fill="white" fill-opacity="0.85"/>
+  <circle cx="322" cy="206" r="4" fill="white" fill-opacity="0.85"/>
+
+  <!-- Nose -->
+  <ellipse cx="256" cy="284" rx="10" ry="7"
+           fill="#E8A87C" stroke="#2A1A0A" stroke-width="1.5" fill-opacity="0.6"/>
+  <!-- Nostrils -->
+  <ellipse cx="249" cy="287" rx="5" ry="3.5"
+           fill="#2A1A0A" fill-opacity="0.35"/>
+  <ellipse cx="263" cy="287" rx="5" ry="3.5"
+           fill="#2A1A0A" fill-opacity="0.35"/>
+
+  <!-- Cheek blush -->
+  <ellipse cx="188" cy="256" rx="30" ry="17"
+           fill="url(#cheekL)"/>
+  <ellipse cx="324" cy="256" rx="30" ry="17"
+           fill="url(#cheekR)"/>
+
+  <!-- ── Mouth ── -->
+  <path d="M 213.3,338.2 C 232.1,335.8 279.9,335.8 298.7,338.2 C 279.9,340.7 232.1,340.7 213.3,338.2 Z" fill="#1A0A08" fill-opacity="-0.06"/>
+  <path d="M 213.3,336.7 C 237.2,327.8 229.2,321.8 256.0,328.8 C 282.8,321.8 274.8,327.8 298.7,336.7 C 284.4,335.8 227.6,335.8 213.3,336.7 Z" fill="#D4806A" stroke="#2A1A0A" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M 213.3,336.7 C 227.6,340.7 284.4,340.7 298.7,336.7 C 274.8,352.7 237.2,352.7 213.3,336.7 Z" fill="#C06050" stroke="#2A1A0A" stroke-width="2" stroke-linejoin="round"/>
+  <ellipse cx="256" cy="328.8"
+           rx="17.1" ry="3"
+           fill="white" fill-opacity="0.30"/>
+  <path d="M 251,305.8 L 253,325.8
+            M 261,305.8 L 259,325.8"
+        fill="none" stroke="#E8A87C" stroke-width="1.5" stroke-linecap="round" stroke-opacity="0.5"/>
+
+  <!-- Label -->
+  <text x="12" y="30" font-family="system-ui,sans-serif" font-size="18"
+        font-weight="700" fill="#2A1A0A" fill-opacity="0.55">I</text>
+  <text x="12" y="50" font-family="system-ui,sans-serif" font-size="13"
+        fill="#2A1A0A" fill-opacity="0.35">ih, iy</text>
+
+</svg>

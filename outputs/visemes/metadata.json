@@ -1,0 +1,190 @@
+{
+  "base_image": "outputs/base_face.png",
+  "visemes": {
+    "sil": {
+      "path": "outputs/visemes/sil.png",
+      "phonemes": [
+        "silence"
+      ],
+      "shape": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "PP": {
+      "path": "outputs/visemes/PP.png",
+      "phonemes": [
+        "p",
+        "b",
+        "m"
+      ],
+      "shape": [
+        0.0,
+        0.0,
+        -0.2
+      ]
+    },
+    "FF": {
+      "path": "outputs/visemes/FF.png",
+      "phonemes": [
+        "f",
+        "v"
+      ],
+      "shape": [
+        0.05,
+        0.15,
+        0.2
+      ]
+    },
+    "TH": {
+      "path": "outputs/visemes/TH.png",
+      "phonemes": [
+        "th",
+        "dh"
+      ],
+      "shape": [
+        0.1,
+        0.0,
+        0.3
+      ]
+    },
+    "DD": {
+      "path": "outputs/visemes/DD.png",
+      "phonemes": [
+        "t",
+        "d"
+      ],
+      "shape": [
+        0.15,
+        0.1,
+        0.3
+      ]
+    },
+    "kk": {
+      "path": "outputs/visemes/kk.png",
+      "phonemes": [
+        "k",
+        "g"
+      ],
+      "shape": [
+        0.2,
+        0.0,
+        0.25
+      ]
+    },
+    "CH": {
+      "path": "outputs/visemes/CH.png",
+      "phonemes": [
+        "ch",
+        "j",
+        "sh",
+        "zh"
+      ],
+      "shape": [
+        0.12,
+        -0.35,
+        0.28
+      ]
+    },
+    "SS": {
+      "path": "outputs/visemes/SS.png",
+      "phonemes": [
+        "s",
+        "z"
+      ],
+      "shape": [
+        0.05,
+        0.5,
+        0.12
+      ]
+    },
+    "nn": {
+      "path": "outputs/visemes/nn.png",
+      "phonemes": [
+        "n",
+        "l",
+        "ng"
+      ],
+      "shape": [
+        0.1,
+        0.05,
+        0.2
+      ]
+    },
+    "RR": {
+      "path": "outputs/visemes/RR.png",
+      "phonemes": [
+        "r"
+      ],
+      "shape": [
+        0.15,
+        -0.28,
+        0.25
+      ]
+    },
+    "aa": {
+      "path": "outputs/visemes/aa.png",
+      "phonemes": [
+        "ah",
+        "aa",
+        "ae"
+      ],
+      "shape": [
+        0.85,
+        0.15,
+        0.8
+      ]
+    },
+    "E": {
+      "path": "outputs/visemes/E.png",
+      "phonemes": [
+        "eh",
+        "ey"
+      ],
+      "shape": [
+        0.4,
+        0.3,
+        0.5
+      ]
+    },
+    "ih": {
+      "path": "outputs/visemes/ih.png",
+      "phonemes": [
+        "ih",
+        "iy"
+      ],
+      "shape": [
+        0.05,
+        0.55,
+        0.1
+      ]
+    },
+    "oh": {
+      "path": "outputs/visemes/oh.png",
+      "phonemes": [
+        "oh",
+        "ao",
+        "ow"
+      ],
+      "shape": [
+        0.45,
+        -0.4,
+        0.52
+      ]
+    },
+    "ou": {
+      "path": "outputs/visemes/ou.png",
+      "phonemes": [
+        "oo",
+        "uw",
+        "uh"
+      ],
+      "shape": [
+        0.18,
+        -0.65,
+        0.28
+      ]
+    }
+  }
+}
