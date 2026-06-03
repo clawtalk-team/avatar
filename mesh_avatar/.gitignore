@@ -1,0 +1,4 @@
+# scratch / preview artifacts from debug_render.py and render_anim.py
+_preview.mp4
+_frame_*.png
+_debug_*.png

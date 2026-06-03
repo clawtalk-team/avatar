@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>2.5D Mesh Avatar — MediaPipe + three.js (prototype)</title>
+<style>
+  :root { --bg:#0e0f13; --panel:#1a1c22; --ink:#e8e9ee; --muted:#9aa0ad; --accent:#6ea8fe; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+         display:flex; flex-direction:column; align-items:center; padding:28px 16px; }
+  h1 { font-size:18px; font-weight:600; margin:0 0 2px; }
+  .sub { color:var(--muted); font-size:13px; margin-bottom:18px; text-align:center; max-width:600px; }
+  .stage { position:relative; width:512px; max-width:92vw; aspect-ratio:1/1;
+           background:#000; border-radius:16px; overflow:hidden; box-shadow:0 18px 50px rgba(0,0,0,.5); }
+  .stage img#bg { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:none; }
+  .stage canvas { position:absolute; inset:0; width:100%; height:100%; display:block; }
+  #status { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+            background:rgba(8,9,12,.86); color:var(--muted); font-size:13px; text-align:center; padding:24px; z-index:5; }
+  .sentence { margin:16px 0 4px; font-size:14px; color:var(--ink); max-width:560px; text-align:center; }
+  .controls { display:flex; gap:10px; align-items:center; margin-top:14px; flex-wrap:wrap; justify-content:center; }
+  button { background:var(--accent); color:#06122e; border:0; border-radius:10px;
+           padding:9px 18px; font-weight:600; font-size:14px; cursor:pointer; }
+  button:disabled { opacity:.4; cursor:default; }
+  .badge { font-variant:tabular-nums; background:var(--panel); border:1px solid #2a2d36;
+           padding:6px 12px; border-radius:8px; min-width:110px; text-align:center; color:var(--muted); }
+  .badge b { color:var(--accent); }
+  label.chk { color:var(--muted); font-size:13px; display:flex; align-items:center; gap:6px; cursor:pointer; }
+  input[type=range]{ width:120px; }
+  .track { width:512px; max-width:92vw; height:6px; background:var(--panel); border-radius:3px; margin-top:14px; overflow:hidden; }
+  .track > i { display:block; height:100%; width:0; background:var(--accent); }
+  .note { color:var(--muted); font-size:12px; margin-top:18px; max-width:600px; text-align:center; }
+  code { background:#000; padding:1px 5px; border-radius:4px; color:#cdd3df; }
+</style>
+</head>
+<body>
+  <h1>2.5D Mesh Avatar <span style="color:var(--muted);font-weight:400">— prototype</span></h1>
+  <div class="sub">Separate from the 2D morph demo. A textured <b>MediaPipe</b> mouth-region mesh
+    cross-dissolved per viseme (teeth come from each viseme's own still) and rendered in <b>three.js</b>.
+    Same blendshape vocabulary Audio2Face emits, so A2F can drive this rig later. Client-side — zero per-user GPU.</div>
+
+  <div class="stage">
+    <img id="bg" alt=""/>
+    <canvas id="cv"></canvas>
+    <div id="status">Loading three.js & mesh data…</div>
+  </div>
+
+  <div class="sentence" id="sentence">&nbsp;</div>
+
+  <div class="controls">
+    <button id="play" disabled>&#9654; Play</button>
+    <span class="badge">viseme: <b id="vis">sil</b></span>
+    <label class="chk"><input type="checkbox" id="bgchk" checked/> background still</label>
+    <label class="chk">depth <input type="range" id="depth" min="0" max="2.5" step="0.05" value="1.0"/></label>
+    <label class="chk"><input type="checkbox" id="wire"/> wireframe</label>
+  </div>
+  <div class="track"><i id="fill"></i></div>
+
+  <div class="note">Run: <code>python3 -m http.server</code> from the repo root, open
+    <code>/mesh_avatar/mesh_demo.html</code>. Data baked by
+    <code>.venv-landmarks/bin/python mesh_avatar/extract_mesh.py</code>. Needs WebGL (real browser, not headless).
+    <br/>Uncheck <b>background still</b> to inspect the bare mouth mesh. (A single photo can't texture a
+    head turn, so there's no head-sway here — that's the parked full-3D-head track.)</div>
+
+  <audio id="audio" preload="auto"></audio>
+  <!-- Reuse the existing Deepgram/Whisper timeline + audio, untouched -->
+  <script src="../outputs/lipsync/lipsync_data.js"></script>
+
+  <script type="module">
+  import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+
+  const $ = id => document.getElementById(id);
+  const statusEl = $('status'), playBtn = $('play'), visEl = $('vis'),
+        fillEl = $('fill'), audio = $('audio'), bgImg = $('bg');
+  const fail = m => { statusEl.style.display='flex'; statusEl.textContent = m; };
+
+  let MESH;
+  try { MESH = await (await fetch('./mesh_data.json')).json(); }
+  catch (e) { fail('Could not load mesh_data.json — run extract_mesh.py first.'); throw e; }
+
+  const SIZE = MESH.size, REF = MESH.ref, N = MESH.visemes[REF].verts.length;
+  const TRANS_MS = 70;                        // cross-dissolve window
+  const FEATHER = 46;                         // edge alpha falloff (canvas px)
+  const VIS = MESH.visemes;
+  const LIP = window.LIPSYNC_DATA || { timeline: [], sentence: '', audio: '' };
+  $('sentence').textContent = LIP.sentence || '';
+  if (LIP.audio) audio.src = '../' + LIP.audio.replace(/^(\.\.\/)+/, '');
+  const has = v => !!VIS[v];
+  const pick = v => has(v) ? v : REF;
+
+  // Restrict to a mouth-centered region (matches render_anim.py): keeps the feathered
+  // seam low on the face where viseme-to-viseme tone differences are hidden; the rest
+  // of the head stays as the pristine static still behind the canvas.
+  const RV = VIS[REF].verts;
+  const MC = [13,14,78,308].reduce((a,i)=>[a[0]+RV[i][0], a[1]+RV[i][1]], [0,0]).map(x=>x/4);
+  const R = 1.15 * Math.hypot(RV[152][0]-MC[0], RV[152][1]-MC[1]);
+  const TRIS = MESH.triangles.filter(t => {
+    const cx=(RV[t[0]][0]+RV[t[1]][0]+RV[t[2]][0])/3, cy=(RV[t[0]][1]+RV[t[1]][1]+RV[t[2]][1])/3;
+    return Math.hypot(cx-MC[0], cy-MC[1]) < R;
+  });
+
+  // Per-viseme aligned 3D positions (centered, y-flipped) + raw UVs into own image.
+  const POS = {}, UV = {};
+  for (const [v, d] of Object.entries(VIS)) {
+    const p = new Float32Array(N * 3), u = new Float32Array(N * 2);
+    for (let i = 0; i < N; i++) {
+      p[i*3]   =  d.verts[i][0] - SIZE/2;
+      p[i*3+1] = -(d.verts[i][1] - SIZE/2);
+      p[i*3+2] = -d.verts[i][2];
+      u[i*2]   =  d.uv[i][0];
+      u[i*2+1] =  d.uv[i][1];
+    }
+    POS[v] = p; UV[v] = u;
+  }
+
+  // Edge feather: fade the outer silhouette ring to alpha 0 so the deforming patch
+  // melts into the identical static background (kills the dark seam).
+  const edgeAlpha = (() => {
+    const cnt = new Map(), key = (a,b) => a<b ? a+','+b : b+','+a;
+    for (const [a,b,c] of TRIS)
+      for (const [i,j] of [[a,b],[b,c],[c,a]]) cnt.set(key(i,j), (cnt.get(key(i,j))||0)+1);
+    const boundary = new Set();
+    for (const [k,n] of cnt) if (n === 1) { const [i,j] = k.split(',').map(Number); boundary.add(i); boundary.add(j); }
+    const rv = VIS[REF].verts, bIdx = [...boundary];
+    const a = new Float32Array(N);
+    for (let i = 0; i < N; i++) {
+      if (boundary.has(i)) { a[i] = 0; continue; }
+      let dmin = 1e9;
+      for (const b of bIdx) { const dx = rv[i][0]-rv[b][0], dy = rv[i][1]-rv[b][1]; const d = dx*dx+dy*dy; if (d < dmin) dmin = d; }
+      const d = Math.sqrt(dmin);
+      let t = Math.min(1, d / FEATHER); a[i] = t*t*(3-2*t);   // smoothstep
+    }
+    return a;
+  })();
+
+  // ---- three.js scene ----
+  const stage = document.querySelector('.stage');
+  let renderer;
+  try {
+    renderer = new THREE.WebGLRenderer({ canvas: $('cv'), alpha:true, antialias:true });
+  } catch (e) { fail('WebGL unavailable in this browser/context.'); throw e; }
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  const setSize = () => renderer.setSize(stage.clientWidth, stage.clientHeight, false);
+  setSize(); addEventListener('resize', setSize);
+  const camera = new THREE.PerspectiveCamera(35, 1, 1, 5000);
+  camera.position.set(0, 0, (SIZE/2) / Math.tan((35*Math.PI/180)/2));
+  camera.lookAt(0,0,0);
+  const scene = new THREE.Scene();
+  const group = new THREE.Group(); scene.add(group);
+
+  // Shared, live position buffer + per-vertex RGBA color (alpha = edge feather).
+  const posAttr  = new THREE.BufferAttribute(new Float32Array(POS[REF]), 3);
+  const colArr = new Float32Array(N * 4);
+  for (let i = 0; i < N; i++) { colArr[i*4]=1; colArr[i*4+1]=1; colArr[i*4+2]=1; colArr[i*4+3]=edgeAlpha[i]; }
+  const colAttr = new THREE.BufferAttribute(colArr, 4);
+  const indexAttr = new THREE.BufferAttribute(new Uint16Array(TRIS.flat()), 1);
+
+  const textures = {};
+  const loader = new THREE.TextureLoader();
+  const texFor = v => {
+    if (textures[v]) return textures[v];
+    const t = loader.load('../outputs/flashimage/' + VIS[v].file, () => render());
+    t.colorSpace = THREE.SRGBColorSpace; t.minFilter = THREE.LinearFilter;
+    return (textures[v] = t);
+  };
+
+  // MeshBasicMaterial (no custom shader): vertexColors carries the edge-feather alpha,
+  // material.opacity drives the cross-dissolve. Two stacked layers.
+  const makeLayer = () => {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', posAttr);
+    g.setAttribute('color', colAttr);
+    g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(UV[REF]), 2));
+    g.setIndex(indexAttr);
+    const m = new THREE.MeshBasicMaterial({
+      map: texFor(REF), transparent: true, vertexColors: true,
+      depthTest: false, depthWrite: false, side: THREE.DoubleSide,
+    });
+    const mesh = new THREE.Mesh(g, m); mesh.frustumCulled = false;
+    group.add(mesh); return { g, m, mesh };
+  };
+  const base = makeLayer();           // source viseme (under)
+  const over = makeLayer();           // target viseme (cross-dissolves in on top)
+  over.mesh.renderOrder = 1;
+
+  const setLayer = (layer, v) => {
+    layer.m.map = texFor(v); layer.m.needsUpdate = true;
+    layer.g.attributes.uv.array.set(UV[pick(v)]);
+    layer.g.attributes.uv.needsUpdate = true;
+  };
+  setLayer(base, REF); setLayer(over, REF);
+  bgImg.src = MESH.texture;
+
+  // ---- morph: discrete source->target cross-dissolve, like the 2D demo ----
+  let srcV = REF, dstV = REF, tStart = -1, depth = 1.0;
+  const smooth = x => x*x*(3-2*x);
+  const activeViseme = ms => {
+    for (const s of LIP.timeline) if (ms >= s.start_ms && ms < s.end_ms) return pick(s.viseme);
+    return REF;
+  };
+  const beginTransition = (from, to, now) => {
+    srcV = from; dstV = to; tStart = now; setLayer(base, from); setLayer(over, to);
+  };
+
+  function frame(now) {
+    if (!audio.paused) {
+      const want = activeViseme(audio.currentTime * 1000);
+      if (want !== dstV) beginTransition(dstV, want, now);
+      fillEl.style.width = (100 * audio.currentTime / (audio.duration||1)) + '%';
+    }
+    visEl.textContent = dstV;
+    const t = tStart < 0 ? 1 : Math.min(1, (now - tStart) / TRANS_MS);
+    const e = smooth(t);
+    if (t >= 1) srcV = dstV;
+    const ps = POS[srcV], pd = POS[dstV], a = posAttr.array;
+    for (let i = 0; i < N; i++) {
+      a[i*3]   = ps[i*3]   + (pd[i*3]   - ps[i*3])   * e;
+      a[i*3+1] = ps[i*3+1] + (pd[i*3+1] - ps[i*3+1]) * e;
+      a[i*3+2] = (ps[i*3+2] + (pd[i*3+2] - ps[i*3+2]) * e) * depth;
+    }
+    posAttr.needsUpdate = true;
+    over.m.opacity = (srcV === dstV) ? 1 : e;
+    base.m.opacity = 1;
+    render();
+    requestAnimationFrame(frame);
+  }
+  function render(){ renderer.render(scene, camera); }
+
+  // ---- controls ----
+  const applyBg = () => { bgImg.style.display = $('bgchk').checked ? 'block' : 'none'; };
+  $('depth').oninput  = e => depth = +e.target.value;
+  $('bgchk').onchange   = applyBg;
+  $('wire').onchange    = e => { base.m.wireframe = over.m.wireframe = e.target.checked; };
+  applyBg();
+  playBtn.onclick = () => {
+    if (audio.paused) { audio.play(); playBtn.innerHTML = '&#10073;&#10073; Pause'; }
+    else { audio.pause(); playBtn.innerHTML = '&#9654; Play'; }
+  };
+  audio.onended = () => playBtn.innerHTML = '&#9654; Play';
+
+  statusEl.style.display = 'none';
+  playBtn.disabled = !LIP.timeline.length;
+  if (!LIP.timeline.length) fail('No lipsync timeline found.');
+  requestAnimationFrame(frame);
+  </script>
+</body>
+</html>
