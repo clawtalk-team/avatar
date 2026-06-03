@@ -188,8 +188,16 @@ def generate(style: str, name: str, visemes: list[str], model: str, out_root: Pa
             _test.get_caller_identity()
             use_bedrock = True
             bedrock_client = boto3.client("bedrock-runtime", region_name=bedrock_region)
-            # Map model name to Bedrock model ID
-            bedrock_model = model if "." in model else f"anthropic.{model}-v1"
+            # Map model name to Bedrock cross-region inference profile
+            # Direct model IDs require provisioned throughput; profiles use on-demand.
+            _region_prefix = "au" if bedrock_region.startswith("ap-southeast-2") else "us"
+            if "." in model and not model.startswith(("au.", "us.", "global.")):
+                # already a bare model ID like anthropic.claude-opus-4-6-v1
+                bedrock_model = f"{_region_prefix}.{model}"
+            elif "." not in model:
+                bedrock_model = f"{_region_prefix}.anthropic.{model}-v1"
+            else:
+                bedrock_model = model  # already a profile ID
             print(f"Using Bedrock: {bedrock_model} ({bedrock_region})")
         except Exception:
             pass  # no valid AWS creds, fall through
