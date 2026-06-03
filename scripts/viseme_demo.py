@@ -402,22 +402,33 @@ function setLids(ry) {{
   if (lidR) lidR.setAttribute('ry', ry);
 }}
 
-function blink() {{
-  // Ease ry from 0 → 28 → 0 over ~200ms
-  const EYE_RY = 28;
-  const steps = [0, 7, 14, 21, 28, 28, 21, 14, 7, 0];
-  const stepMs = 20; // 20ms per step → 200ms total blink
-  steps.forEach((ry, i) => setTimeout(() => setLids(ry), i * stepMs));
-  const blinkDone = steps.length * stepMs;
-  // Schedule next blink: 4–9 seconds
-  const next = 4000 + Math.random() * 5000;
-  setTimeout(() => {{
-    blink();
-    if (Math.random() < 0.25) setTimeout(blink, 250); // occasional double-blink
-  }}, blinkDone + next);
+// Single-chain blink scheduler — only ONE timer chain ever runs.
+// The old approach called blink() AND scheduled a double-blink, creating two
+// independent perpetual loops that multiplied on every double-blink.
+const BLINK_STEPS = [0, 7, 14, 21, 28, 28, 21, 14, 7, 0];
+const BLINK_STEP_MS = 20; // 200ms total
+
+function runBlink(onDone) {{
+  BLINK_STEPS.forEach((ry, i) => setTimeout(() => setLids(ry), i * BLINK_STEP_MS));
+  setTimeout(onDone, BLINK_STEPS.length * BLINK_STEP_MS);
 }}
 
-setTimeout(blink, 1000 + Math.random() * 2000);
+function scheduleBlink() {{
+  const wait = 4000 + Math.random() * 5000;
+  setTimeout(() => {{
+    // First blink
+    runBlink(() => {{
+      if (Math.random() < 0.25) {{
+        // Double-blink: one extra 250ms later, then continue the chain
+        setTimeout(() => runBlink(scheduleBlink), 250);
+      }} else {{
+        scheduleBlink(); // back to waiting
+      }}
+    }});
+  }}, wait);
+}}
+
+setTimeout(scheduleBlink, 1000 + Math.random() * 2000);
 </script>
 </body></html>"""
 

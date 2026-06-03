@@ -232,7 +232,7 @@ and `RUNPOD_POD_ID` from `.env` at the project root. Commands: `status`, `start`
 
 ---
 
-### 7. Flash Image visemes + MediaPipe morph (working spike)
+### 7. Flash Image visemes + MediaPipe morph (working spike, superseded by #8)
 
 **Idea:** The photorealistic version of approach #2. Instead of hand-coded bezier
 geometry, generate a photoreal still per viseme with an identity-locked image model,
@@ -292,6 +292,85 @@ RunPod/FantasyTalking stack; reuses the existing timeline that Veo can't consume
 
 ---
 
+### 8. Claude-generated SVG visemes + Deepgram audio demo (current)
+
+**Idea:** Use Claude Opus 4.6 to generate cartoon face SVGs per viseme via prompt. Unlike
+the parametric approach (#2) the art quality is AI-generated and expressive; unlike the
+Flash Image approach (#7) there is no pixel warping or landmark extraction — each frame is
+a standalone SVG and switching between them is an instant DOM swap. This became the
+foundation for a full head studio.
+
+**Why SVG over pixel stills:** SVG keeps everything outside the mouth static (no inter-frame
+jitter), scales to any resolution, is trivially bundleable in a Flutter app as asset strings,
+and needs zero GPU at runtime.
+
+#### 8a — Single head generation
+
+`scripts/generate_head.py` generates a complete set of 15 viseme SVGs for one character.
+The `sil` (closed mouth) frame is generated first and embedded in every subsequent prompt
+as a pixel-level reference, which is what locks character identity across all 15 frames.
+
+```
+python scripts/generate_head.py --preset young_woman
+python scripts/generate_head.py --style "elderly man, white hair, kind expression, flat design"
+python scripts/generate_head.py --list-presets   # show all 6 bundled characters
+```
+
+Outputs to `outputs/heads/<name>/` — 15 SVGs + `gallery.html`.
+
+#### 8b — Batch generation (6 presets)
+
+`scripts/generate_heads_batch.py` generates all 6 bundled preset characters (young/middle/older
+× male/female) in one run and builds a combined `showcase.html`. `--skip-existing` resumes
+an interrupted run without re-generating SVGs that already exist.
+
+```
+python scripts/generate_heads_batch.py --skip-existing
+```
+
+6 bundled presets:
+
+| Key | Description |
+|-----|-------------|
+| `young_man` | young man, mid-20s, short dark hair, light skin, clean-shaven |
+| `middle_man` | middle-aged man, 40s, salt-and-pepper stubble, medium-brown skin |
+| `older_man` | elderly man, 70s, white hair, weathered warm skin, kind eyes |
+| `young_woman` | young woman, mid-20s, long auburn hair, fair freckled skin |
+| `middle_woman` | middle-aged woman, 40s, dark hair with grey streaks, medium-brown skin |
+| `older_woman` | elderly woman, 70s, silver bun, light wrinkled skin, rosy cheeks |
+
+#### 8c — Audio-driven demo
+
+`scripts/viseme_demo.py` generates a self-contained `outputs/viseme_demo.html` with:
+
+- **Deepgram TTS** (`aura-2-thalia-en`) for speech synthesis
+- **Deepgram STT** (`nova-3` with `timestamps=true`) for word-level timing
+- **CMUdict** phoneme lookup + ARPAbet → viseme mapping within each word's time window
+- Speed controls (0.25×, 0.5×, 1×)
+- Idle eye-blink overlay (two SVG ellipses animating `ry` 0→28→0, 4–9s intervals)
+- Three sample sentences covering all 15 visemes
+
+TTS/STT results are cached in `outputs/viseme_cache/` so subsequent runs are instant.
+
+#### 8d — Web studio
+
+`webapp/server.py` is a FastAPI server (default port 7432) that wraps the generation
+and audio APIs into a browser UI. `webapp/index.html` is a single-page app with:
+- **Sidebar:** preset picker, custom style input, head list with thumbnails
+- **Gallery tab:** all 15 viseme frames for the selected head
+- **Demo tab:** full audio-driven lip-sync with custom sentence input and speed controls
+
+```
+python webapp/server.py
+open http://localhost:7432
+```
+
+**Key technical detail:** `safe_json()` replaces `</` with `<\/` in SVG content embedded
+inside `<script>` blocks — SVG paths containing `</path>` would otherwise break the
+HTML parser and silently kill all JavaScript.
+
+---
+
 ## Current state
 
 | Component | Status |
@@ -305,6 +384,11 @@ RunPod/FantasyTalking stack; reuses the existing timeline that Veo can't consume
 | Flash Image visemes (15) | Working — `outputs/flashimage/` |
 | MediaPipe morph demo | Working — open `morph_demo.html` |
 | Flutter macOS app | Working — `avatar_demo/` |
+| **Claude SVG viseme generation** | **Working — `scripts/generate_head.py`** |
+| **6-preset batch generation** | **Working — `scripts/generate_heads_batch.py`** |
+| **Audio-driven SVG demo** | **Working — `outputs/viseme_demo.html`** |
+| **Head studio web app** | **Working — `webapp/server.py`** |
+| **Flutter integration guide** | **Written — `docs/flutter_integration.md`** |
 | RunPod infrastructure | Implemented, not yet run on live pod |
 | Wan 2.2 T2V avatar | Not yet generated |
 | Wan 2.2 I2V viseme pipeline | Not yet generated |
@@ -316,60 +400,35 @@ RunPod/FantasyTalking stack; reuses the existing timeline that Veo can't consume
 
 ### Near term
 
-**End-to-end real avatar pipeline:**
+**Flutter integration:** Wire the SVG avatar into the ClaWTalk Flutter app (Voxhelm).
+See `docs/flutter_integration.md` for the full plan. Key steps:
+- Add `clawtalk_avatar` Flutter package (`flutter_svg` + `VisemeController` + `BlinkController`)
+- Add ElevenLabs TTS client to voice-gateway with character-level alignment output
+- Add `phoneme_timeline` WebSocket message type carrying `{t, viseme}` events to Flutter
+- Mount `ClaWTalkAvatar` widget in `CallScreen` alongside existing `AgentAudioVisualizer`
+- ~4.5 days for production-ready integration; ~2 days for a bundled demo
+
+**End-to-end photorealistic avatar pipeline (RunPod):**
 1. Start the RunPod pod
 2. Run `generate_viseme_i2v.py` to produce the photorealistic SIL portrait
-3. Feed `outputs/lipsync/audio.mp3` (from the Deepgram TTS pipeline) into
-   `generate_fantasy_talking.py` with the SIL portrait as input
+3. Feed `outputs/lipsync/audio.mp3` into `generate_fantasy_talking.py` with the SIL portrait
 4. The result is a photorealistic talking head video synced to the TTS audio
-
-**Replace SVG cartoon in demo:**
-Once FantasyTalking output is satisfactory, replace the SVG avatar in `demo.html`
-with either a `<video>` element (pre-generated) or a composited approach where the
-AI-generated face is composited over the parametric mouth (preserving the real-time
-capability while upgrading the face quality).
 
 ### Longer term
 
-**Real-time inference:** FantasyTalking and the full Wan 2.2 pipeline are
-batch-oriented (minutes per clip on an RTX 6000). For a real-time talking avatar,
-the options are:
-- **Pre-generate per sentence** — generate a video for each likely TTS utterance and
-  cache it. Acceptable for a limited-vocabulary app.
-- **Faster models** — lighter audio-driven talking head models (SadTalker, Hallo, etc.)
-  trade quality for speed. Some run near-real-time on consumer hardware.
-- **Hybrid** — keep the parametric SVG mouth for real-time response but composite it
-  over a static AI-generated portrait (blending the two approaches).
+**Real-time inference:** FantasyTalking and the full Wan 2.2 pipeline are batch-oriented
+(minutes per clip on an RTX 6000). For a real-time talking avatar, the options are:
+- **Pre-generate per sentence** — generate a video for each likely TTS utterance and cache it.
+- **Faster models** — SadTalker, Hallo, etc. trade quality for speed; some near-real-time.
+- **Hybrid** — keep the SVG mouth for real-time response but composite over an AI portrait.
 
-**Flutter integration:** Feed the FantasyTalking video output into the Flutter app as
-a `VideoPlayerController` asset, replacing the `CustomPainter` mouth with the real video.
-The parametric implementation remains available as a fallback for low-latency scenarios.
+**Expand character library:** The 6 presets cover basic demographics. Add more styles
+(fantasy characters, robots, animals, brand mascots) using `generate_head.py --style`.
 
-**Full viseme set coverage:** The I2V pipeline currently demonstrates SIL, PP, and FF.
-Extend to the full 15-viseme set for higher accuracy, particularly for vowels (aa, E, I,
-O, U have very distinct mouth shapes that are noticeable when wrong).
-
-**Neural SVG generation — StarVector:** Rather than hand-tuning the bezier geometry in
-`svg_generator.py`, use a model trained to generate SVG natively.
-[StarVector](https://starvector.github.io/starvector/) (2025) is a code-generation model
-that produces clean `<path>` SVG from image or text inputs — it reasons about vector
-structure rather than rasterising to pixels. Potential applications here:
-
-- **Face generation:** prompt StarVector with a character description to produce a
-  scalable SVG face with correct topology (eyes, mouth region already separate paths)
-  rather than hand-coding every ellipse and bezier.
-- **Viseme mouth shapes:** given a reference raster of each viseme mouth position,
-  StarVector could trace it into clean SVG paths — giving a more organic shape than
-  the current analytic geometry while keeping the SVG parametric benefit of infinite
-  scale and instant re-render.
-- **Consistency:** because SVG is structured code, the model's outputs can be parsed
-  and the mouth group extracted/replaced in the same DOM-swap pattern the current demo
-  uses, without changing the animation architecture.
-
-The main uncertainty is whether StarVector can produce mouth shapes that animate
-smoothly when interpolated — the current approach lerps three floats which is
-trivially smooth; SVG paths from a generative model would need matching topology
-between visemes to interpolate control points meaningfully.
+**StarVector (exploratory):** A neural model that generates SVG natively from text/image.
+Could produce more organic mouth shapes than the current analytic geometry while keeping
+the SVG DOM-swap architecture. Main uncertainty: SVG paths need matching topology between
+visemes to allow control-point interpolation.
 
 ---
 
@@ -382,24 +441,40 @@ svg_generator.py            Parametric SVG face generator (15 visemes)
 generator.py                Original SD inpainting approach (abandoned)
 
 scripts/
+  generate_head.py          Generate 15-viseme SVG set for one character (CLI)
+  generate_heads_batch.py   Batch-generate all 6 preset characters + showcase gallery
+  viseme_demo.py            Deepgram TTS/STT audio demo → outputs/viseme_demo.html
   lipsync_pipeline.py       Deepgram TTS → Whisper → CMUdict → viseme timeline
   flashimage_generate.py    Gemini 2.5 Flash Image → 15 identity-locked viseme stills
   extract_landmarks.py      MediaPipe landmarks + alignment + triangulation → geometry.json
+
+webapp/
+  server.py                 FastAPI server (port 7432) — head generation + audio APIs
+  index.html                Single-page head studio (gallery + demo + custom sentences)
+
+docs/
+  flutter_integration.md    Flutter + voice-gateway integration guide
+  talking-head-options.md   Research notes on talking-head model options
 
 models/
   face_landmarker.task      MediaPipe FaceLandmarker model (downloaded)
 
 outputs/
+  heads/                    Claude-generated SVG heads (one dir per character)
+    young_man/              15 SVGs + gallery.html
+    young_woman/
+    …
+  viseme_demo.html          Standalone audio-driven lip-sync demo
+  viseme_cache/             Cached TTS audio + STT timelines (keyed by sentence)
   lipsync/
-    audio.mp3               Generated TTS audio
+    audio.mp3               Generated TTS audio (Whisper pipeline)
     lipsync_data.js         Viseme timeline (loaded by both demos)
-  svg_visemes/              Generated SVG face frames
   flashimage/
     base.png, <viseme>.png  Flash Image base + 15 viseme stills
     manifest.json           viseme → filename map
     geometry.json           aligned landmarks + triangles (consumed by morph_demo.html)
 
-avatar_demo/                Flutter macOS app
+avatar_demo/                Flutter macOS app (parametric SVG approach)
   lib/main.dart             Full CustomPainter implementation + AudioPlayer + Ticker
   assets/
     audio/audio.mp3         Bundled TTS audio
@@ -422,23 +497,34 @@ runpod/                     RunPod / ComfyUI AI video generation pipeline
 ## Setup
 
 ```bash
-# Python deps for lipsync pipeline
-pip install requests openai-whisper nltk --break-system-packages
-
 # Env vars (in .env — not committed)
-DEEPGRAM_API_KEY=...
-OPENROUTER_API_KEY=...    # for Flash Image viseme generation
+ANTHROPIC_API_KEY=...     # for Claude SVG generation
+DEEPGRAM_API_KEY=...      # for TTS + STT timestamps
+OPENROUTER_API_KEY=...    # alternative to ANTHROPIC_API_KEY; also for Flash Image
 RUNPOD_API_KEY=...
 RUNPOD_POD_ID=...
-COMFYUI_URL=...    # set after starting the pod
+COMFYUI_URL=...           # set after starting the pod
 
-# Run lipsync pipeline
-python scripts/lipsync_pipeline.py
+# ── Claude SVG head generation ──────────────────────────────────────────────
+pip install anthropic
 
-# Open SVG browser demo
-open demo.html
+# Generate a single character (15 viseme SVGs)
+python scripts/generate_head.py --preset young_woman
+python scripts/generate_head.py --style "robot with glowing eyes, teal accent, flat design"
 
-# Flash Image + MediaPipe morph demo
+# Generate all 6 preset characters
+python scripts/generate_heads_batch.py --skip-existing
+
+# Audio-driven demo (requires DEEPGRAM_API_KEY)
+python scripts/viseme_demo.py
+open outputs/viseme_demo.html
+
+# ── Head studio web app ───────────────────────────────────────────────────
+pip install fastapi "uvicorn[standard]"
+python webapp/server.py
+open http://localhost:7432
+
+# ── Flash Image + MediaPipe morph demo ───────────────────────────────────
 python scripts/flashimage_generate.py                 # generate 15 viseme stills (~$0.60)
 python scripts/flashimage_generate.py blink           # eyes-closed still for the idle blink
 uv venv --python 3.12 .venv-landmarks                 # MediaPipe needs Python <=3.12
@@ -447,10 +533,15 @@ uv pip install --python .venv-landmarks/bin/python mediapipe opencv-python-headl
 python3 -m http.server 8765                           # serve over http:// (canvas pixel access)
 open http://localhost:8765/morph_demo.html
 
-# Run Flutter app (macOS)
+# ── Parametric SVG demo ───────────────────────────────────────────────────
+pip install requests openai-whisper nltk
+python scripts/lipsync_pipeline.py
+open demo.html
+
+# ── Flutter macOS app ─────────────────────────────────────────────────────
 cd avatar_demo && flutter run -d macos
 
-# RunPod avatar generation
+# ── RunPod avatar generation ──────────────────────────────────────────────
 python runpod/pod.py start
 export COMFYUI_URL=$(python runpod/pod.py url)
 python runpod/generate_viseme_i2v.py

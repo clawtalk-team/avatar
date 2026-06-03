@@ -486,19 +486,29 @@ function setLids(ry) {
   if (lidR) lidR.setAttribute('ry', ry);
 }
 
-function blink() {
-  const steps = [0, 7, 14, 21, 28, 28, 21, 14, 7, 0];
-  steps.forEach((ry, i) => setTimeout(() => setLids(ry), i * 20));
-  const done = steps.length * 20;
-  const next = 4000 + Math.random() * 5000;
+const BLINK_STEPS = [0, 7, 14, 21, 28, 28, 21, 14, 7, 0];
+const BLINK_STEP_MS = 20;
+
+function runBlink(onDone) {
+  BLINK_STEPS.forEach((ry, i) => setTimeout(() => setLids(ry), i * BLINK_STEP_MS));
+  setTimeout(onDone, BLINK_STEPS.length * BLINK_STEP_MS);
+}
+
+function scheduleBlink() {
+  const wait = 4000 + Math.random() * 5000;
   setTimeout(() => {
-    blink();
-    if (Math.random() < 0.25) setTimeout(blink, 250);
-  }, done + next);
+    runBlink(() => {
+      if (Math.random() < 0.25) {
+        setTimeout(() => runBlink(scheduleBlink), 250);
+      } else {
+        scheduleBlink();
+      }
+    });
+  }, wait);
 }
 
 function startBlink() {
-  setTimeout(blink, 1500 + Math.random() * 2000);
+  setTimeout(scheduleBlink, 1500 + Math.random() * 2000);
 }
 
 // ── Boot ─────────────────────────────────────────────────────────────────────
