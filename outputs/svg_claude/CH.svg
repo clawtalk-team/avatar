@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Background -->
+  <rect width="512" height="512" fill="#E8F4F8" rx="20"/>
+  
+  <!-- Shoulders -->
+  <ellipse cx="256" cy="510" rx="160" ry="80" fill="#4A90D9"/>
+  
+  <!-- Neck -->
+  <rect x="224" y="380" width="64" height="60" rx="10" fill="#F5C4A1"/>
+  
+  <!-- Neck shadow -->
+  <rect x="224" y="380" width="64" height="20" rx="5" fill="#E8AD8C" opacity="0.5"/>
+  
+  <!-- Hair back (behind head) -->
+  <ellipse cx="256" cy="175" rx="140" ry="145" fill="#6B4226"/>
+  
+  <!-- Face -->
+  <ellipse cx="256" cy="250" rx="120" ry="140" fill="#F5C4A1"/>
+  
+  <!-- Face outline -->
+  <ellipse cx="256" cy="250" rx="120" ry="140" fill="none" stroke="#3D2B1F" stroke-width="3"/>
+  
+  <!-- Ears -->
+  <ellipse cx="132" cy="260" rx="22" ry="30" fill="#F5C4A1" stroke="#3D2B1F" stroke-width="3"/>
+  <ellipse cx="132" cy="262" rx="12" ry="18" fill="#E8AD8C"/>
+  <ellipse cx="380" cy="260" rx="22" ry="30" fill="#F5C4A1" stroke="#3D2B1F" stroke-width="3"/>
+  <ellipse cx="380" cy="262" rx="12" ry="18" fill="#E8AD8C"/>
+  
+  <!-- Hair top -->
+  <path d="M136 210 Q136 100 256 90 Q376 100 376 210 Q370 160 310 140 Q280 130 256 135 Q232 130 202 140 Q142 160 136 210 Z" fill="#6B4226" stroke="#3D2B1F" stroke-width="3"/>
+  
+  <!-- Hair bangs -->
+  <path d="M150 200 Q160 140 200 125 Q230 115 256 120 Q282 115 312 125 Q352 140 362 200 Q350 170 310 155 Q280 145 256 148 Q232 145 202 155 Q162 170 150 200 Z" fill="#7D5233"/>
+  
+  <!-- Hair side left -->
+  <path d="M136 210 Q130 240 134 270 Q138 240 145 220 Z" fill="#6B4226"/>
+  
+  <!-- Hair side right -->
+  <path d="M376 210 Q382 240 378 270 Q374 240 367 220 Z" fill="#6B4226"/>
+  
+  <!-- Eyebrows -->
+  <path d="M185 205 Q205 190 230 198" stroke="#3D2B1F" stroke-width="5" stroke-linecap="round" fill="none"/>
+  <path d="M327 205 Q307 190 282 198" stroke="#3D2B1F" stroke-width="5" stroke-linecap="round" fill="none"/>
+  
+  <!-- Eye whites - left -->
+  <ellipse cx="210" cy="240" rx="30" ry="28" fill="white" stroke="#3D2B1F" stroke-width="2.5"/>
+  
+  <!-- Eye whites - right -->
+  <ellipse cx="302" cy="240" rx="30" ry="28" fill="white" stroke="#3D2B1F" stroke-width="2.5"/>
+  
+  <!-- Iris - left -->
+  <ellipse cx="214" cy="243" rx="18" ry="19" fill="#5B8C5A"/>
+  
+  <!-- Iris - right -->
+  <ellipse cx="306" cy="243" rx="18" ry="19" fill="#5B8C5A"/>
+  
+  <!-- Pupil - left -->
+  <ellipse cx="216" cy="245" rx="9" ry="10" fill="#1A1A2E"/>
+  
+  <!-- Pupil - right -->
+  <ellipse cx="308" cy="245" rx="9" ry="10" fill="#1A1A2E"/>
+  
+  <!-- Eye shine - left -->
+  <ellipse cx="222" cy="237" rx="5" ry="5" fill="white" opacity="0.9"/>
+  
+  <!-- Eye shine - right -->
+  <ellipse cx="314" cy="237" rx="5" ry="5" fill="white" opacity="0.9"/>
+  
+  <!-- Nose -->
+  <path d="M250 285 Q256 298 262 285" stroke="#D4956B" stroke-width="3" stroke-linecap="round" fill="none"/>
+  
+  <!-- Cheek blush left -->
+  <ellipse cx="175" cy="300" rx="22" ry="14" fill="#F4A0A0" opacity="0.35"/>
+  
+  <!-- Cheek blush right -->
+  <ellipse cx="337" cy="300" rx="22" ry="14" fill="#F4A0A0" opacity="0.35"/>
+  
+  <!-- Mouth - CH viseme: rounded, slightly forward, slightly open -->
+  <!-- Outer lip shape - rounded forward pucker, slightly open -->
+  <ellipse cx="256" cy="330" rx="22" ry="18" fill="#3D2B1F" stroke="#3D2B1F" stroke-width="2.5"/>
+  
+  <!-- Inner mouth opening - dark interior -->
+  <ellipse cx="256" cy="330" rx="16" ry="12" fill="#2D1015"/>
+  
+  <!-- Upper lip definition -->
+  <path d="M238 322 Q244 316 256 315 Q268 316 274 322" fill="#C97878" stroke="none"/>
+  <path d="M238 322 Q244 316 256 315 Q268 316 274 322 Q268 324 256 325 Q244 324 238 322 Z" fill="#C97878"/>
+  
+  <!-- Lower lip -->
+  <path d="M238 338 Q244 346 256 347 Q268 346 274 338" fill="none" stroke="none"/>
+  <path d="M238 338 Q244 348 256 350 Q268 348 274 338 Q268 336 256 335 Q244 336 238 338 Z" fill="#D4878A"/>
+  
+  <!-- Tongue hint -->
+  <ellipse cx="256" cy="337" rx="10" ry="6" fill="#C96B6B" opacity="0.6"/>
+  
+  <!-- Lip outline for clean definition -->
+  <path d="M234 330 Q234 314 256 312 Q278 314 278 330 Q278 348 256 350 Q234 348 234 330 Z" fill="none" stroke="#3D2B1F" stroke-width="2.5"/>
+</svg>
