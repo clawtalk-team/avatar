@@ -4,3 +4,6 @@ models/
 .claude/
 .env
 avatar_demo/build/
+.gstack/
+.venv-landmarks/
+outputs/flashimage/*.png

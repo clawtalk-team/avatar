@@ -232,6 +232,63 @@ and `RUNPOD_POD_ID` from `.env` at the project root. Commands: `status`, `start`
 
 ---
 
+### 7. Flash Image visemes + MediaPipe morph (working spike)
+
+**Idea:** The photorealistic version of approach #2. Instead of hand-coded bezier
+geometry, generate a photoreal still per viseme with an identity-locked image model,
+then morph between stills with landmark-driven warping — keeping the exact same
+timeline-driven animation architecture (static face, only the mouth moves, smoothstep
+blend on each viseme change). This is the GPU-free, real-time path: no Veo video (which
+generates its own audio and can't be driven by our timeline), no RunPod pod.
+
+**Pipeline:**
+
+1. **Stills — `scripts/flashimage_generate.py`.** Gemini 2.5 Flash Image (nano-banana)
+   via OpenRouter (`OPENROUTER_API_KEY` in `.env`, ~$0.04/image). Generate ONE base
+   portrait (text-to-image), then for each of the 15 OVR visemes, *edit only the mouth*
+   of that base ("same person, identical everything, change only the mouth to …"). Editing
+   one base — rather than generating 15 faces independently — is what keeps identity stable;
+   it's the lesson from the failed SD-inpainting run (#1). Output: `outputs/flashimage/<viseme>.png`
+   + `manifest.json`.
+
+2. **Landmarks — `scripts/extract_landmarks.py`.** MediaPipe FaceLandmarker (478 points)
+   on each still. nano-banana drifts head scale slightly between generations, so each still
+   is **similarity-aligned to `sil`** using stable points (eyes/nose/contour) — only the
+   mouth then differs frame-to-frame. Fixed border anchors pin the perimeter, and one shared
+   Delaunay triangulation (970 triangles over 498 points) is computed from the reference
+   frame. All of this is precomputed offline into `outputs/flashimage/geometry.json` so the
+   browser needs no MediaPipe, WebGL, or CDN at runtime. (MediaPipe needs Python ≤3.12, so
+   this runs in a separate `.venv-landmarks`; the rest of the repo is fine on 3.14.)
+
+3. **Morph demo — `morph_demo.html`.** Pure canvas-2D. Loads the stills + `geometry.json` +
+   the existing Deepgram/Whisper timeline (`outputs/lipsync/lipsync_data.js`) and audio. The
+   render loop is the same as `demo.html`: look up the current viseme by `audio.currentTime`,
+   snapshot on change, smoothstep-blend over a ~42ms (24fps) window. **Mouth-region
+   compositing:** every frame draws ONE static `sil` face as the base (so the head never
+   jitters), then composites only a feathered elliptical mouth patch on top — the morphed
+   mouth (per-triangle affine warp + cross-dissolve of prev→cur viseme) clipped to the mask
+   via `destination-in`. The mask extent is the bounding box of the mouth/jaw landmarks across
+   all visemes, so an open jaw still fits. Missing visemes fall back to the nearest generated
+   mouth shape, so the demo runs end-to-end at any coverage level.
+
+**Result:** All 15 visemes generate with consistent identity; the open-mouth interior
+(teeth/tongue) that pure morphing can't invent comes from the target still via the
+cross-dissolve. Because everything outside the feathered mouth mask is a single static
+image, the head is rock-steady — no inter-frame jitter. Verified end-to-end in a headless
+browser — `audio.currentTime` drives the viseme badge and the canvas morph through an
+11.8s, 4-sentence passage exercising all 15 visemes, no JS errors.
+
+Two alignment lessons baked in: (1) the similarity alignment must use only rigid landmarks
+(eyes/nose/forehead) — including the chin made open-mouth frames rescale the whole head;
+(2) viseme prompts need an explicit "relaxed eyebrows, neutral eyes" instruction or the
+model adds a surprised expression on wide vowels.
+
+**Why this beats the alternatives for a real-time photoreal avatar:** ~$0.60 one-time
+generation vs ~$96/sentence for per-viseme Veo video; runs client-side with no GPU vs the
+RunPod/FantasyTalking stack; reuses the existing timeline that Veo can't consume.
+
+---
+
 ## Current state
 
 | Component | Status |
@@ -242,6 +299,8 @@ and `RUNPOD_POD_ID` from `.env` at the project root. Commands: `status`, `start`
 | CMUdict viseme mapping | Working |
 | Smoothstep transitions | Working |
 | Browser lipsync demo | Working — open `demo.html` |
+| Flash Image visemes (15) | Working — `outputs/flashimage/` |
+| MediaPipe morph demo | Working — open `morph_demo.html` |
 | Flutter macOS app | Working — `avatar_demo/` |
 | RunPod infrastructure | Implemented, not yet run on live pod |
 | Wan 2.2 T2V avatar | Not yet generated |
@@ -315,17 +374,27 @@ between visemes to interpolate control points meaningfully.
 
 ```
 demo.html                   Browser lipsync demo (SVG cartoon + Deepgram audio)
+morph_demo.html             Browser lipsync demo (Flash Image stills + MediaPipe morph)
 svg_generator.py            Parametric SVG face generator (15 visemes)
 generator.py                Original SD inpainting approach (abandoned)
 
 scripts/
   lipsync_pipeline.py       Deepgram TTS → Whisper → CMUdict → viseme timeline
+  flashimage_generate.py    Gemini 2.5 Flash Image → 15 identity-locked viseme stills
+  extract_landmarks.py      MediaPipe landmarks + alignment + triangulation → geometry.json
+
+models/
+  face_landmarker.task      MediaPipe FaceLandmarker model (downloaded)
 
 outputs/
   lipsync/
     audio.mp3               Generated TTS audio
-    lipsync_data.js         Viseme timeline (loaded by demo.html)
+    lipsync_data.js         Viseme timeline (loaded by both demos)
   svg_visemes/              Generated SVG face frames
+  flashimage/
+    base.png, <viseme>.png  Flash Image base + 15 viseme stills
+    manifest.json           viseme → filename map
+    geometry.json           aligned landmarks + triangles (consumed by morph_demo.html)
 
 avatar_demo/                Flutter macOS app
   lib/main.dart             Full CustomPainter implementation + AudioPlayer + Ticker
@@ -355,6 +424,7 @@ pip install requests openai-whisper nltk --break-system-packages
 
 # Env vars (in .env — not committed)
 DEEPGRAM_API_KEY=...
+OPENROUTER_API_KEY=...    # for Flash Image viseme generation
 RUNPOD_API_KEY=...
 RUNPOD_POD_ID=...
 COMFYUI_URL=...    # set after starting the pod
@@ -362,8 +432,16 @@ COMFYUI_URL=...    # set after starting the pod
 # Run lipsync pipeline
 python scripts/lipsync_pipeline.py
 
-# Open browser demo
+# Open SVG browser demo
 open demo.html
+
+# Flash Image + MediaPipe morph demo
+python scripts/flashimage_generate.py                 # generate 15 viseme stills (~$0.60)
+uv venv --python 3.12 .venv-landmarks                 # MediaPipe needs Python <=3.12
+uv pip install --python .venv-landmarks/bin/python mediapipe opencv-python-headless numpy scipy
+.venv-landmarks/bin/python scripts/extract_landmarks.py
+python3 -m http.server 8765                           # serve over http:// (canvas pixel access)
+open http://localhost:8765/morph_demo.html
 
 # Run Flutter app (macOS)
 cd avatar_demo && flutter run -d macos

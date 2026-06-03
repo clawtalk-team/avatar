@@ -17,7 +17,12 @@ import nltk
 from pathlib import Path
 
 # ── Config ──────────────────────────────────────────────────────────────────
-SENTENCE = "Hello, how are you today? I hope you're having a wonderful day."
+# Viseme-rich default: bilabials (PP), fricatives (FF), sibilants (SS/CH),
+# rounded vowels (O/U), wide vowels (aa/E), rhotics (RR) — exercises most transitions.
+SENTENCE = ("Hello there, and welcome aboard. "
+            "Would you like a warm cup of coffee before we show you the ship? "
+            "She found five shiny seashells by the shore. "
+            "Now breathe slowly, relax, and enjoy this amazing journey.")
 
 OUT_DIR   = Path(__file__).parent.parent / "outputs" / "lipsync"
 AUDIO_PATH = OUT_DIR / "audio.mp3"
@@ -201,6 +206,12 @@ def audio_duration(audio_path: Path) -> float:
 # ── Main ──────────────────────────────────────────────────────────────────────
 def main():
     OUT_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Optional: override the sentence from the command line (non-flag args).
+    global SENTENCE
+    free = [a for a in sys.argv[1:] if not a.startswith("--")]
+    if free:
+        SENTENCE = " ".join(free)
 
     # 1. TTS
     if "--skip-tts" not in sys.argv:
