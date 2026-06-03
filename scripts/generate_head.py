@@ -44,6 +44,12 @@ except ImportError:
     sys.exit("anthropic package not found — run: pip install anthropic")
 
 try:
+    import boto3 as _boto3
+    HAS_BOTO3 = True
+except ImportError:
+    HAS_BOTO3 = False
+
+try:
     import openai as _openai_mod
     HAS_OPENAI = True
 except ImportError:
@@ -169,19 +175,38 @@ def generate(style: str, name: str, visemes: list[str], model: str, out_root: Pa
 
     anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "")
     openrouter_key = os.environ.get("OPENROUTER_API_KEY", "")
+    bedrock_region = os.environ.get("AWS_BEDROCK_REGION", os.environ.get("AWS_DEFAULT_REGION", "ap-southeast-2"))
 
     use_openrouter = False
-    if anthropic_key:
-        client = anthropic.Anthropic(api_key=anthropic_key)
-    elif openrouter_key and HAS_OPENAI:
-        use_openrouter = True
-        import openai
-        client = openai.OpenAI(api_key=openrouter_key, base_url="https://openrouter.ai/api/v1")
-        if "/" not in model:
-            model = f"anthropic/{model}"
-        print(f"Using OpenRouter: {model}")
-    else:
-        sys.exit("Set ANTHROPIC_API_KEY or OPENROUTER_API_KEY (with openai package).")
+    use_bedrock = False
+
+    # Priority: Bedrock (local AWS creds) → Anthropic direct → OpenRouter
+    if HAS_BOTO3 and not anthropic_key:
+        try:
+            import boto3, json as _json
+            _test = boto3.client("sts", region_name=bedrock_region)
+            _test.get_caller_identity()
+            use_bedrock = True
+            bedrock_client = boto3.client("bedrock-runtime", region_name=bedrock_region)
+            # Map model name to Bedrock model ID
+            bedrock_model = model if "." in model else f"anthropic.{model}-v1"
+            print(f"Using Bedrock: {bedrock_model} ({bedrock_region})")
+        except Exception:
+            pass  # no valid AWS creds, fall through
+
+    if not use_bedrock:
+        if anthropic_key:
+            client = anthropic.Anthropic(api_key=anthropic_key)
+        elif openrouter_key and HAS_OPENAI:
+            use_openrouter = True
+            import openai
+            client = openai.OpenAI(api_key=openrouter_key, base_url="https://openrouter.ai/api/v1")
+            if "/" not in model:
+                model = f"anthropic/{model}"
+            print(f"Using OpenRouter: {model}")
+        else:
+            sys.exit("No credentials found. Set ANTHROPIC_API_KEY, configure AWS for Bedrock, "
+                     "or set OPENROUTER_API_KEY (with openai package).")
 
     print(f"\n{'='*60}")
     print(f"  Character : {name}")
@@ -210,7 +235,19 @@ def generate(style: str, name: str, visemes: list[str], model: str, out_root: Pa
         prompt = build_prompt(style, viseme, first_svg)
 
         try:
-            if use_openrouter:
+            if use_bedrock:
+                import boto3, json as _json
+                body = _json.dumps({
+                    "anthropic_version": "bedrock-2023-05-31",
+                    "max_tokens": 4096,
+                    "system": SYSTEM_PROMPT,
+                    "messages": [{"role": "user", "content": prompt}],
+                })
+                resp = bedrock_client.invoke_model(modelId=bedrock_model, body=body)
+                result = _json.loads(resp["body"].read())
+                svg_text = result["content"][0]["text"].strip()
+                tokens_out = result["usage"]["output_tokens"]
+            elif use_openrouter:
                 response = client.chat.completions.create(
                     model=model, max_tokens=4096,
                     messages=[{"role": "system", "content": SYSTEM_PROMPT},
