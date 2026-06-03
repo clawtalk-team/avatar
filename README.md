@@ -287,6 +287,28 @@ The parametric implementation remains available as a fallback for low-latency sc
 Extend to the full 15-viseme set for higher accuracy, particularly for vowels (aa, E, I,
 O, U have very distinct mouth shapes that are noticeable when wrong).
 
+**Neural SVG generation — StarVector:** Rather than hand-tuning the bezier geometry in
+`svg_generator.py`, use a model trained to generate SVG natively.
+[StarVector](https://starvector.github.io/starvector/) (2025) is a code-generation model
+that produces clean `<path>` SVG from image or text inputs — it reasons about vector
+structure rather than rasterising to pixels. Potential applications here:
+
+- **Face generation:** prompt StarVector with a character description to produce a
+  scalable SVG face with correct topology (eyes, mouth region already separate paths)
+  rather than hand-coding every ellipse and bezier.
+- **Viseme mouth shapes:** given a reference raster of each viseme mouth position,
+  StarVector could trace it into clean SVG paths — giving a more organic shape than
+  the current analytic geometry while keeping the SVG parametric benefit of infinite
+  scale and instant re-render.
+- **Consistency:** because SVG is structured code, the model's outputs can be parsed
+  and the mouth group extracted/replaced in the same DOM-swap pattern the current demo
+  uses, without changing the animation architecture.
+
+The main uncertainty is whether StarVector can produce mouth shapes that animate
+smoothly when interpolated — the current approach lerps three floats which is
+trivially smooth; SVG paths from a generative model would need matching topology
+between visemes to interpolate control points meaningfully.
+
 ---
 
 ## Project structure
