@@ -425,10 +425,35 @@ See `docs/flutter_integration.md` for the full plan. Key steps:
 **Expand character library:** The 6 presets cover basic demographics. Add more styles
 (fantasy characters, robots, animals, brand mascots) using `generate_head.py --style`.
 
-**StarVector (exploratory):** A neural model that generates SVG natively from text/image.
-Could produce more organic mouth shapes than the current analytic geometry while keeping
-the SVG DOM-swap architecture. Main uncertainty: SVG paths need matching topology between
-visemes to allow control-point interpolation.
+**SVG generation via neural models — two approaches to explore:**
+
+*Option A — Gemini image gen → StarVector im2svg (implemented, ready to run):*
+`flashimage_generate.py` already generates 15 PNG face images via Gemini 2.5 Flash Image
+on OpenRouter, using the base-portrait identity-lock strategy. The new script
+`runpod/generate_starvector_from_images.py` picks up those PNGs, spins up a RunPod GPU
+pod, runs StarVector 8B im2svg on each frame, and saves SVGs to `outputs/heads/<name>/`
+compatible with the webapp. Sidesteps StarVector's text-to-SVG quality ceiling (it excels
+at icons/logos, not expressive faces) and leverages Gemini's image generation for the hard
+part. Main risk: SVG path topology may differ frame-to-frame since each is traced
+independently, which could block smooth CSS interpolation between visemes.
+
+```bash
+# Step 1 — generate face images with Gemini (if not already done)
+python scripts/flashimage_generate.py
+
+# Step 2 — trace each PNG to SVG on RunPod with StarVector 8B
+python runpod/generate_starvector_from_images.py --name gemini_woman
+# Opens gallery.html in outputs/heads/gemini_woman/ when done
+```
+
+*Option B — StarVector text-to-SVG directly:*
+Pass a text prompt to `starvector-8b-im2svg` (on RunPod, ~16 GB VRAM) and get SVG out
+directly. No intermediate raster step, no external image API. Quality is limited: the
+model was trained on vector primitives (icons, diagrams, emoji) and does not produce
+complex character faces well. Worth a quick test prompt ("a friendly cartoon face with
+mouth closed") to see actual output quality, but expect simpler shapes than Claude SVG.
+Existing `runpod/generate_starvector.py` (uses parametric SVG input) shows the pod setup
+pattern; adapt the remote script to use `model.generate_t2svg()` instead.
 
 ---
 
@@ -486,6 +511,8 @@ runpod/                     RunPod / ComfyUI AI video generation pipeline
   generate_viseme.py        T2V viseme sequence (single pass)
   generate_viseme_i2v.py    4-phase I2V pipeline (consistent avatar)
   generate_fantasy_talking.py  Audio-driven lip sync via FantasyTalking
+  generate_starvector.py              StarVector im2svg from parametric SVG frames
+  generate_starvector_from_images.py  StarVector im2svg from Gemini PNG frames (Option A)
   core/
     comfyui_client.py       ComfyUI REST client
     wan_workflow.py         Wan 2.2 T2V workflow builder

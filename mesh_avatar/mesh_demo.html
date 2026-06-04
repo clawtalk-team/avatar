@@ -27,7 +27,7 @@
            padding:6px 12px; border-radius:8px; min-width:110px; text-align:center; color:var(--muted); }
   .badge b { color:var(--accent); }
   label.chk { color:var(--muted); font-size:13px; display:flex; align-items:center; gap:6px; cursor:pointer; }
-  input[type=range]{ width:120px; }
+  input[type=range]{ width:110px; }
   .track { width:512px; max-width:92vw; height:6px; background:var(--panel); border-radius:3px; margin-top:14px; overflow:hidden; }
   .track > i { display:block; height:100%; width:0; background:var(--accent); }
   .note { color:var(--muted); font-size:12px; margin-top:18px; max-width:600px; text-align:center; }
@@ -36,9 +36,9 @@
 </head>
 <body>
   <h1>2.5D Mesh Avatar <span style="color:var(--muted);font-weight:400">— prototype</span></h1>
-  <div class="sub">Separate from the 2D morph demo. A textured <b>MediaPipe</b> mouth-region mesh
-    cross-dissolved per viseme (teeth come from each viseme's own still) and rendered in <b>three.js</b>.
-    Same blendshape vocabulary Audio2Face emits, so A2F can drive this rig later. Client-side — zero per-user GPU.</div>
+  <div class="sub">Separate from the 2D morph demo. Feathered <b>MediaPipe</b> region meshes over the
+    static still: mouth (viseme timeline), plus idle <b>blinking</b> and subtle <b>eyebrow</b> motion.
+    three.js/WebGL, client-side, zero per-user GPU. Same blendshapes Audio2Face emits, so A2F can drive it later.</div>
 
   <div class="stage">
     <img id="bg" alt=""/>
@@ -52,19 +52,17 @@
     <button id="play" disabled>&#9654; Play</button>
     <span class="badge">viseme: <b id="vis">sil</b></span>
     <label class="chk"><input type="checkbox" id="bgchk" checked/> background still</label>
+    <label class="chk"><input type="checkbox" id="eyechk" checked/> blink + brows</label>
     <label class="chk">depth <input type="range" id="depth" min="0" max="2.5" step="0.05" value="1.0"/></label>
     <label class="chk"><input type="checkbox" id="wire"/> wireframe</label>
   </div>
   <div class="track"><i id="fill"></i></div>
 
-  <div class="note">Run: <code>python3 -m http.server</code> from the repo root, open
-    <code>/mesh_avatar/mesh_demo.html</code>. Data baked by
-    <code>.venv-landmarks/bin/python mesh_avatar/extract_mesh.py</code>. Needs WebGL (real browser, not headless).
-    <br/>Uncheck <b>background still</b> to inspect the bare mouth mesh. (A single photo can't texture a
-    head turn, so there's no head-sway here — that's the parked full-3D-head track.)</div>
+  <div class="note">Run <code>python3 -m http.server</code> from the repo root, open
+    <code>/mesh_avatar/mesh_demo.html</code>. Data baked by <code>extract_mesh.py</code>; offline preview by
+    <code>render_anim.py</code>. Needs WebGL (real browser). Blinks run on an idle timer even while paused.</div>
 
   <audio id="audio" preload="auto"></audio>
-  <!-- Reuse the existing Deepgram/Whisper timeline + audio, untouched -->
   <script src="../outputs/lipsync/lipsync_data.js"></script>
 
   <script type="module">
@@ -80,66 +78,56 @@
   catch (e) { fail('Could not load mesh_data.json — run extract_mesh.py first.'); throw e; }
 
   const SIZE = MESH.size, REF = MESH.ref, N = MESH.visemes[REF].verts.length;
-  const TRANS_MS = 70;                        // cross-dissolve window
-  const FEATHER = 46;                         // edge alpha falloff (canvas px)
-  const VIS = MESH.visemes;
+  const TRANS_MS = 70, FEATHER = 46, BROW_PX = 6;
+  const VIS = MESH.visemes, RV = VIS[REF].verts;
   const LIP = window.LIPSYNC_DATA || { timeline: [], sentence: '', audio: '' };
   $('sentence').textContent = LIP.sentence || '';
   if (LIP.audio) audio.src = '../' + LIP.audio.replace(/^(\.\.\/)+/, '');
   const has = v => !!VIS[v];
   const pick = v => has(v) ? v : REF;
 
-  // Restrict to a mouth-centered region (matches render_anim.py): keeps the feathered
-  // seam low on the face where viseme-to-viseme tone differences are hidden; the rest
-  // of the head stays as the pristine static still behind the canvas.
-  const RV = VIS[REF].verts;
-  const MC = [13,14,78,308].reduce((a,i)=>[a[0]+RV[i][0], a[1]+RV[i][1]], [0,0]).map(x=>x/4);
-  const R = 1.15 * Math.hypot(RV[152][0]-MC[0], RV[152][1]-MC[1]);
-  const TRIS = MESH.triangles.filter(t => {
-    const cx=(RV[t[0]][0]+RV[t[1]][0]+RV[t[2]][0])/3, cy=(RV[t[0]][1]+RV[t[1]][1]+RV[t[2]][1])/3;
-    return Math.hypot(cx-MC[0], cy-MC[1]) < R;
-  });
-
-  // Per-viseme aligned 3D positions (centered, y-flipped) + raw UVs into own image.
+  // Per-viseme three-space positions (centered, y-flipped) + raw UVs into own image.
   const POS = {}, UV = {};
   for (const [v, d] of Object.entries(VIS)) {
     const p = new Float32Array(N * 3), u = new Float32Array(N * 2);
     for (let i = 0; i < N; i++) {
-      p[i*3]   =  d.verts[i][0] - SIZE/2;
-      p[i*3+1] = -(d.verts[i][1] - SIZE/2);
-      p[i*3+2] = -d.verts[i][2];
-      u[i*2]   =  d.uv[i][0];
-      u[i*2+1] =  d.uv[i][1];
+      p[i*3] = d.verts[i][0] - SIZE/2; p[i*3+1] = -(d.verts[i][1] - SIZE/2); p[i*3+2] = -d.verts[i][2];
+      u[i*2] = d.uv[i][0]; u[i*2+1] = d.uv[i][1];
     }
     POS[v] = p; UV[v] = u;
   }
 
-  // Edge feather: fade the outer silhouette ring to alpha 0 so the deforming patch
-  // melts into the identical static background (kills the dark seam).
-  const edgeAlpha = (() => {
-    const cnt = new Map(), key = (a,b) => a<b ? a+','+b : b+','+a;
-    for (const [a,b,c] of TRIS)
-      for (const [i,j] of [[a,b],[b,c],[c,a]]) cnt.set(key(i,j), (cnt.get(key(i,j))||0)+1);
+  // ---- landmark groups ----
+  const avg = ids => ids.reduce((a,i)=>[a[0]+RV[i][0], a[1]+RV[i][1]], [0,0]).map(x=>x/ids.length);
+  const MOUTH_C = avg([13,14,78,308]);
+  const R_MOUTH = 1.15 * Math.hypot(RV[152][0]-MOUTH_C[0], RV[152][1]-MOUTH_C[1]);
+  const EYE_L = avg([33,133,159,145,160,144]), EYE_R = avg([362,263,386,374,387,373]);
+  const BROW = [70,63,105,66,107,55,65,52,53,46, 336,296,334,293,300,285,295,282,283,276];
+
+  // region = triangles within R of center + per-vertex feather alpha (smoothstep to 0 at edge)
+  const regionData = (center, R) => {
+    const tris = MESH.triangles.filter(t => {
+      const cx=(RV[t[0]][0]+RV[t[1]][0]+RV[t[2]][0])/3, cy=(RV[t[0]][1]+RV[t[1]][1]+RV[t[2]][1])/3;
+      return Math.hypot(cx-center[0], cy-center[1]) < R;
+    });
+    const cnt = new Map(), key=(a,b)=>a<b?a+','+b:b+','+a;
+    for (const [a,b,c] of tris) for (const [i,j] of [[a,b],[b,c],[c,a]]) cnt.set(key(i,j),(cnt.get(key(i,j))||0)+1);
     const boundary = new Set();
-    for (const [k,n] of cnt) if (n === 1) { const [i,j] = k.split(',').map(Number); boundary.add(i); boundary.add(j); }
-    const rv = VIS[REF].verts, bIdx = [...boundary];
-    const a = new Float32Array(N);
-    for (let i = 0; i < N; i++) {
-      if (boundary.has(i)) { a[i] = 0; continue; }
-      let dmin = 1e9;
-      for (const b of bIdx) { const dx = rv[i][0]-rv[b][0], dy = rv[i][1]-rv[b][1]; const d = dx*dx+dy*dy; if (d < dmin) dmin = d; }
-      const d = Math.sqrt(dmin);
-      let t = Math.min(1, d / FEATHER); a[i] = t*t*(3-2*t);   // smoothstep
+    for (const [k,n] of cnt) if (n===1){ const [i,j]=k.split(',').map(Number); boundary.add(i); boundary.add(j); }
+    const bIdx=[...boundary], alpha=new Float32Array(N);
+    for (const i of new Set(tris.flat())) {
+      if (boundary.has(i)) continue;
+      let dm=1e9; for (const b of bIdx){ const dx=RV[i][0]-RV[b][0], dy=RV[i][1]-RV[b][1]; const d=dx*dx+dy*dy; if(d<dm)dm=d; }
+      let t=Math.min(1, Math.sqrt(dm)/FEATHER); alpha[i]=t*t*(3-2*t);
     }
-    return a;
-  })();
+    return { tris, alpha };
+  };
 
   // ---- three.js scene ----
   const stage = document.querySelector('.stage');
   let renderer;
-  try {
-    renderer = new THREE.WebGLRenderer({ canvas: $('cv'), alpha:true, antialias:true });
-  } catch (e) { fail('WebGL unavailable in this browser/context.'); throw e; }
+  try { renderer = new THREE.WebGLRenderer({ canvas: $('cv'), alpha:true, antialias:true }); }
+  catch (e) { fail('WebGL unavailable in this browser/context.'); throw e; }
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
   const setSize = () => renderer.setSize(stage.clientWidth, stage.clientHeight, false);
   setSize(); addEventListener('resize', setSize);
@@ -148,13 +136,6 @@
   camera.lookAt(0,0,0);
   const scene = new THREE.Scene();
   const group = new THREE.Group(); scene.add(group);
-
-  // Shared, live position buffer + per-vertex RGBA color (alpha = edge feather).
-  const posAttr  = new THREE.BufferAttribute(new Float32Array(POS[REF]), 3);
-  const colArr = new Float32Array(N * 4);
-  for (let i = 0; i < N; i++) { colArr[i*4]=1; colArr[i*4+1]=1; colArr[i*4+2]=1; colArr[i*4+3]=edgeAlpha[i]; }
-  const colAttr = new THREE.BufferAttribute(colArr, 4);
-  const indexAttr = new THREE.BufferAttribute(new Uint16Array(TRIS.flat()), 1);
 
   const textures = {};
   const loader = new THREE.TextureLoader();
@@ -165,63 +146,91 @@
     return (textures[v] = t);
   };
 
-  // MeshBasicMaterial (no custom shader): vertexColors carries the edge-feather alpha,
-  // material.opacity drives the cross-dissolve. Two stacked layers.
-  const makeLayer = () => {
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', posAttr);
-    g.setAttribute('color', colAttr);
-    g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(UV[REF]), 2));
-    g.setIndex(indexAttr);
-    const m = new THREE.MeshBasicMaterial({
-      map: texFor(REF), transparent: true, vertexColors: true,
-      depthTest: false, depthWrite: false, side: THREE.DoubleSide,
-    });
-    const mesh = new THREE.Mesh(g, m); mesh.frustumCulled = false;
-    group.add(mesh); return { g, m, mesh };
+  const ALL = []; let RO = 0;
+  // A region owns one shared live position buffer + two stacked layers (base + over).
+  const makeRegion = ({ tris, alpha }) => {
+    const posAttr = new THREE.BufferAttribute(new Float32Array(POS[REF]), 3);
+    const colArr = new Float32Array(N*4);
+    for (let i=0;i<N;i++){ colArr[i*4]=1; colArr[i*4+1]=1; colArr[i*4+2]=1; colArr[i*4+3]=alpha[i]; }
+    const colAttr = new THREE.BufferAttribute(colArr, 4);
+    const idx = new THREE.BufferAttribute(new Uint16Array(tris.flat()), 1);
+    const layer = () => {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', posAttr); g.setAttribute('color', colAttr);
+      g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(UV[REF]), 2));
+      g.setIndex(idx);
+      const m = new THREE.MeshBasicMaterial({ map:texFor(REF), transparent:true, vertexColors:true,
+        depthTest:false, depthWrite:false, side:THREE.DoubleSide });
+      const mesh = new THREE.Mesh(g, m); mesh.frustumCulled = false; mesh.renderOrder = RO++;
+      group.add(mesh); ALL.push(m); return { g, m, mesh };
+    };
+    return { posAttr, base: layer(), over: layer() };
   };
-  const base = makeLayer();           // source viseme (under)
-  const over = makeLayer();           // target viseme (cross-dissolves in on top)
-  over.mesh.renderOrder = 1;
-
   const setLayer = (layer, v) => {
     layer.m.map = texFor(v); layer.m.needsUpdate = true;
-    layer.g.attributes.uv.array.set(UV[pick(v)]);
-    layer.g.attributes.uv.needsUpdate = true;
+    layer.g.attributes.uv.array.set(UV[pick(v)]); layer.g.attributes.uv.needsUpdate = true;
   };
-  setLayer(base, REF); setLayer(over, REF);
+
+  const mouth = makeRegion(regionData(MOUTH_C, R_MOUTH));
+  const eyeL  = makeRegion(regionData(EYE_L, 60));
+  const eyeR  = makeRegion(regionData(EYE_R, 60));
+  setLayer(mouth.base, REF); setLayer(mouth.over, REF);
+  for (const e of [eyeL, eyeR]) { setLayer(e.base, 'sil'); setLayer(e.over, pick('blink')); }
   bgImg.src = MESH.texture;
 
-  // ---- morph: discrete source->target cross-dissolve, like the 2D demo ----
-  let srcV = REF, dstV = REF, tStart = -1, depth = 1.0;
+  // write interpolated positions src->dst (with z*depth) into a region's buffer; lift brows.
+  const writePos = (posAttr, srcV, dstV, e, browLift) => {
+    const ps = POS[srcV], pd = POS[dstV], a = posAttr.array;
+    for (let i=0;i<N;i++){
+      a[i*3]   = ps[i*3]   + (pd[i*3]   - ps[i*3])   * e;
+      a[i*3+1] = ps[i*3+1] + (pd[i*3+1] - ps[i*3+1]) * e;
+      a[i*3+2] = (ps[i*3+2] + (pd[i*3+2] - ps[i*3+2]) * e) * depth;
+    }
+    if (browLift > 0) for (const i of BROW) a[i*3+1] += browLift * BROW_PX;  // +y = up
+    posAttr.needsUpdate = true;
+  };
+
   const smooth = x => x*x*(3-2*x);
   const activeViseme = ms => {
     for (const s of LIP.timeline) if (ms >= s.start_ms && ms < s.end_ms) return pick(s.viseme);
     return REF;
   };
-  const beginTransition = (from, to, now) => {
-    srcV = from; dstV = to; tStart = now; setLayer(base, from); setLayer(over, to);
-  };
+
+  // ---- state ----
+  let depth = 1.0, eyesOn = true;
+  let mSrc = REF, mDst = REF, mStart = -1;
+  let nextBlink = 1.0, blinkAt = -9, nextBrow = 2.5, browAt = -9;
 
   function frame(now) {
+    const tnow = now / 1000;
+    // mouth from the audio-driven viseme timeline
     if (!audio.paused) {
       const want = activeViseme(audio.currentTime * 1000);
-      if (want !== dstV) beginTransition(dstV, want, now);
+      if (want !== mDst) { mSrc = mDst; mDst = want; mStart = now; setLayer(mouth.base, mSrc); setLayer(mouth.over, mDst); }
       fillEl.style.width = (100 * audio.currentTime / (audio.duration||1)) + '%';
     }
-    visEl.textContent = dstV;
-    const t = tStart < 0 ? 1 : Math.min(1, (now - tStart) / TRANS_MS);
-    const e = smooth(t);
-    if (t >= 1) srcV = dstV;
-    const ps = POS[srcV], pd = POS[dstV], a = posAttr.array;
-    for (let i = 0; i < N; i++) {
-      a[i*3]   = ps[i*3]   + (pd[i*3]   - ps[i*3])   * e;
-      a[i*3+1] = ps[i*3+1] + (pd[i*3+1] - ps[i*3+1]) * e;
-      a[i*3+2] = (ps[i*3+2] + (pd[i*3+2] - ps[i*3+2]) * e) * depth;
-    }
-    posAttr.needsUpdate = true;
-    over.m.opacity = (srcV === dstV) ? 1 : e;
-    base.m.opacity = 1;
+    const mt = mStart < 0 ? 1 : Math.min(1, (now - mStart) / TRANS_MS), me = smooth(mt);
+    if (mt >= 1) mSrc = mDst;
+    writePos(mouth.posAttr, mSrc, mDst, me, 0);
+    mouth.over.m.opacity = (mSrc === mDst) ? 1 : me; mouth.base.m.opacity = 1;
+    visEl.textContent = mDst;
+
+    // idle blink scheduler (real-time clock — runs even while paused)
+    if (tnow >= nextBlink) { blinkAt = tnow; nextBlink = tnow + 2.5 + Math.random()*2.5; }
+    let be = 0; const bd = tnow - blinkAt;
+    if (bd >= 0 && bd < 0.085) be = smooth(bd/0.085);
+    else if (bd >= 0.085 && bd < 0.21) be = smooth(1 - (bd-0.085)/0.125);
+    // brow raise scheduler
+    if (tnow >= nextBrow) { browAt = tnow; nextBrow = tnow + 4 + Math.random()*3; }
+    let bl = 0; const wd = tnow - browAt;
+    if (wd >= 0 && wd < 0.25) bl = smooth(wd/0.25);
+    else if (wd < 0.6) bl = 1; else if (wd < 0.95) bl = smooth(1 - (wd-0.6)/0.35);
+
+    if (!eyesOn) { be = 0; bl = 0; }
+    writePos(eyeL.posAttr, 'sil', 'blink', be, bl);
+    eyeR.posAttr.array.set(eyeL.posAttr.array); eyeR.posAttr.needsUpdate = true;  // same eye geometry
+    for (const e of [eyeL, eyeR]) { e.over.m.opacity = be; e.base.m.opacity = 1; }
+
     render();
     requestAnimationFrame(frame);
   }
@@ -229,9 +238,10 @@
 
   // ---- controls ----
   const applyBg = () => { bgImg.style.display = $('bgchk').checked ? 'block' : 'none'; };
-  $('depth').oninput  = e => depth = +e.target.value;
-  $('bgchk').onchange   = applyBg;
-  $('wire').onchange    = e => { base.m.wireframe = over.m.wireframe = e.target.checked; };
+  $('depth').oninput = e => depth = +e.target.value;
+  $('bgchk').onchange = applyBg;
+  $('eyechk').onchange = e => { eyesOn = e.target.checked; eyeL.base.mesh.visible = eyeL.over.mesh.visible = eyesOn; eyeR.base.mesh.visible = eyeR.over.mesh.visible = eyesOn; };
+  $('wire').onchange = e => { for (const m of ALL) m.wireframe = e.target.checked; };
   applyBg();
   playBtn.onclick = () => {
     if (audio.paused) { audio.play(); playBtn.innerHTML = '&#10073;&#10073; Pause'; }
