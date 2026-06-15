@@ -7,3 +7,22 @@ avatar_demo/build/
 .gstack/
 .venv-landmarks/
 outputs/flashimage/*.png
+
+# OS
+.DS_Store
+
+# Python build artifacts
+*.egg-info/
+
+# Flutter / Dart
+.dart_tool/
+.metadata
+*.iml
+.idea/
+
+# Generated platform scaffolding (regenerable via flutter create)
+voxhelm_avatar/example/macos/
+voxhelm_avatar/example/test/
+
+# Dead-end spikes
+star-vector/
