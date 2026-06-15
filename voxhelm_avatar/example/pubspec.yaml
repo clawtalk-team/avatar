@@ -1,0 +1,28 @@
+name: voxhelm_avatar_example
+description: Example app demonstrating the Voxhelm Avatar widget.
+publish_to: 'none'
+version: 0.1.0
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  voxhelm_avatar:
+    path: ../
+  audioplayers: ^6.1.0
+  flutter_svg: ^2.0.10+1
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/heads/young_woman/
+    - assets/heads/young_man/
+    - assets/heads/middle_man/
+    - assets/heads/middle_woman/
+    - assets/heads/older_man/
+    - assets/heads/older_woman/
+    - assets/heads/flash_woman/
+    - assets/data/
+    - assets/audio/

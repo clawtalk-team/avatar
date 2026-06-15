@@ -371,28 +371,214 @@ HTML parser and silently kill all JavaScript.
 
 ---
 
-## Current state
+## Implementation candidates
+
+Two working pipelines are ready for Flutter integration. Both share the same audio
+pipeline (Deepgram TTS → STT word timestamps → CMUdict → 15 OVR visemes) and the
+same animation architecture (static face, only the mouth changes, smoothstep blending
+on viseme transitions). They differ in visual style and rendering strategy.
+
+---
+
+### Candidate A — Claude SVG cartoon (approach #8)
+
+**Visual style:** AI-generated cartoon/flat-design faces. Expressive and stylised.
+
+**How it works:** Claude Opus generates a complete SVG per viseme (15 total). The `sil`
+frame is generated first and embedded as a pixel reference in every subsequent prompt,
+which locks character identity. At runtime, switching visemes is a DOM swap (or
+`SvgPicture.string()` swap in Flutter) — no warping, no morphing, no canvas math.
+
+**Generation pipeline:**
+```
+scripts/generate_head.py --preset young_woman
+  → Claude API (Anthropic / Bedrock / OpenRouter)
+  → outputs/heads/<name>/sil.svg … U.svg  (15 SVGs)
+  → outputs/heads/<name>/gallery.html
+```
+
+**Runtime rendering:** Swap the current SVG string for the target viseme. Idle blink is
+an SVG ellipse overlay animating `ry` on a random timer.
+
+**Working demos:**
+- `outputs/viseme_demo.html` — standalone audio-driven lip-sync
+- `webapp/server.py` (port 7432) — head studio with generation, gallery, and demo tabs
+
+**Pre-generated assets:** 7 character sets in `outputs/heads/` (6 presets + 1 Gemini trace).
+Batch generation via `scripts/generate_heads_batch.py --skip-existing`.
+
+**Flutter integration path:** `flutter_svg` renders SVG strings as widgets. Pre-parse all
+15 SVGs into `DrawableRoot` cache on load, then swap widget on each viseme event.
+See `docs/flutter_integration.md` for the full plan.
+
+| Strength | Detail |
+|----------|--------|
+| Zero inter-frame jitter | Everything outside the mouth is literally the same SVG |
+| Resolution-independent | SVG scales to any size, no pixelation |
+| Tiny assets | ~15 SVG strings, a few KB each |
+| No GPU at runtime | Pure widget swap |
+| Character library | 6 presets; custom via `--style` flag |
+| Tooling | Web studio for generation + preview |
+
+| Weakness | Detail |
+|----------|--------|
+| Not photoreal | Cartoon/flat aesthetic only |
+| Hard transitions | Frame-swap, no smooth morph between mouth shapes |
+| Generation cost | ~$0.10–0.50 per character set (Claude API) |
+| Prompt sensitivity | Mouth shapes depend on Claude interpreting viseme descriptions |
+
+---
+
+### Candidate B — Flash Image photoreal + MediaPipe morph (approach #7)
+
+**Visual style:** Photorealistic human faces from Gemini 2.5 Flash Image.
+
+**How it works:** A single base portrait is generated, then each of the 15 visemes is
+produced by *editing* that base image ("same person, change only the mouth to …").
+MediaPipe extracts 478 face landmarks per still, similarity-aligns all frames to `sil`
+(using rigid points — eyes/nose/forehead, not jaw), computes a shared Delaunay
+triangulation (970 triangles), and outputs `geometry.json`. At runtime, per-triangle
+affine warping + cross-dissolve between prev and target viseme stills produces smooth
+mouth morphing. A feathered elliptical mask composites only the mouth region over a
+static `sil` base (so the head never jitters). A separate blink layer composites a
+`blink.png` still through an eye-region mask.
+
+**Generation pipeline (offline, ~$0.60 total):**
+```
+# Step 1 — generate 15 identity-locked viseme stills (Python 3.14 OK)
+python scripts/flashimage_generate.py
+  → Gemini 2.5 Flash Image via OpenRouter
+  → outputs/flashimage/base.png, sil.png … U.png, blink.png, manifest.json
+
+# Step 2 — extract landmarks + triangulate (needs Python ≤3.12)
+.venv-landmarks/bin/python scripts/extract_landmarks.py
+  → MediaPipe FaceLandmarker (478 points per still)
+  → similarity alignment to sil, border anchors, Delaunay
+  → outputs/flashimage/geometry.json
+```
+
+**Runtime rendering:** Canvas-2D per-triangle affine warp. Each frame: draw static `sil`
+base → warp mouth triangles from prev→target with smoothstep blend → composite via
+feathered elliptical mask → composite blink layer if active.
+
+**Working demo:**
+- `morph_demo.html` — audio-driven photoreal morph (serve via `python3 -m http.server`)
+
+**Pre-generated assets:** One character in `outputs/flashimage/` (15 stills + blink + geometry).
+
+**Flutter integration path:** Port the canvas morph renderer to a `CustomPainter`. Load
+the pre-aligned PNGs + `geometry.json` as assets. The triangle math is straightforward
+(affine warp per triangle, already proven in `avatar_demo/lib/main.dart` for the
+parametric approach). Heavier than SVG swap but still no GPU required.
+
+| Strength | Detail |
+|----------|--------|
+| Photorealistic | Real human face, not cartoon |
+| Smooth morphing | Per-triangle warp + cross-dissolve between visemes |
+| Mouth interior | Open-mouth teeth/tongue come from target still, not invented |
+| Cheap generation | ~$0.60 one-time per character |
+| No runtime GPU | Pure canvas-2D / `CustomPainter` affine math |
+
+| Weakness | Detail |
+|----------|--------|
+| Heavier rendering | Per-triangle affine warp every frame vs simple SVG swap |
+| Larger assets | 15 PNGs (~50–100 KB each) + geometry JSON vs tiny SVG strings |
+| Single character | Only one photoreal identity generated so far |
+| Python ≤3.12 dependency | MediaPipe landmark extraction needs separate venv |
+| Subtle seams | Per-triangle boundaries visible during fast transitions (mitigated by base layer) |
+| Fixed identity | Generating a new character requires re-running the full pipeline |
+
+---
+
+### Side-by-side comparison
+
+| Dimension | A — SVG cartoon | B — Flash Image photoreal |
+|-----------|----------------|--------------------------|
+| Visual fidelity | Cartoon / flat design | Photorealistic |
+| Rendering complexity | Widget swap | Per-triangle affine warp |
+| Asset size (per char) | ~50 KB (15 SVGs) | ~1–2 MB (15 PNGs + geometry) |
+| Transition smoothness | Hard frame-switch | Smooth morph + cross-dissolve |
+| Generation cost | ~$0.10–0.50 | ~$0.60 |
+| Character variety | 6 presets + custom | 1 character |
+| Flutter widget | `SvgPicture.string()` swap | `CustomPainter` with affine math |
+| Blink system | SVG ellipse `ry` animation | Composited `blink.png` still |
+| Demo | `webapp/server.py` | `morph_demo.html` |
+| Flutter effort | ~2 days (bundled demo) | ~3–4 days (port morph renderer) |
+
+---
+
+### Shared infrastructure (both candidates)
+
+| Component | Status | Files |
+|-----------|--------|-------|
+| Deepgram TTS | Working | `scripts/lipsync_pipeline.py`, `scripts/viseme_demo.py` |
+| Word timestamps (Whisper / Deepgram STT) | Working | same |
+| CMUdict → 15 OVR visemes | Working | same |
+| Smoothstep transition architecture | Working | both demos |
+| Flutter integration guide | Written (SVG-focused) | `docs/flutter_integration.md` |
+| Flutter macOS prototype | Working (parametric SVG) | `avatar_demo/` |
+
+### Other approaches (not current candidates)
 
 | Component | Status |
 |-----------|--------|
-| SVG parametric cartoon | Working — `demo.html` |
-| Deepgram TTS | Working — `outputs/lipsync/audio.mp3` |
-| Whisper word timestamps | Working |
-| CMUdict viseme mapping | Working |
-| Smoothstep transitions | Working |
-| Browser lipsync demo | Working — open `demo.html` |
-| Flash Image visemes (15) | Working — `outputs/flashimage/` |
-| MediaPipe morph demo | Working — open `morph_demo.html` |
-| Flutter macOS app | Working — `avatar_demo/` |
-| **Claude SVG viseme generation** | **Working — `scripts/generate_head.py`** |
-| **6-preset batch generation** | **Working — `scripts/generate_heads_batch.py`** |
-| **Audio-driven SVG demo** | **Working — `outputs/viseme_demo.html`** |
-| **Head studio web app** | **Working — `webapp/server.py`** |
-| **Flutter integration guide** | **Written — `docs/flutter_integration.md`** |
-| RunPod infrastructure | Implemented, not yet run on live pod |
-| Wan 2.2 T2V avatar | Not yet generated |
-| Wan 2.2 I2V viseme pipeline | Not yet generated |
-| FantasyTalking lipsync | Not yet generated |
+| Parametric SVG cartoon (#2) | Superseded by Claude SVG (#8) |
+| SD inpainting (#1) | Abandoned — identity drift |
+| RunPod / Wan 2.2 infrastructure | Implemented, not yet run on live pod |
+| Wan 2.2 T2V / I2V viseme pipeline | Not yet generated |
+| FantasyTalking audio-driven lipsync | Not yet generated |
+| StarVector im2svg | Dead end — documented |
+
+---
+
+## Voxhelm Toolkit
+
+The `voxhelm` Python package and `voxhelm_avatar` Flutter package provide a
+structured pipeline for generating and rendering SVG talking avatars.
+
+### CLI (Python)
+
+```bash
+pip install -e .                                          # install
+voxhelm generate --preset young_woman                     # generate 15 viseme SVGs
+voxhelm generate --style "robot, teal accents" --name bot # custom character
+voxhelm speak --head young_woman --text "Hello world"     # audio + viseme demo
+voxhelm validate --head young_woman                       # web viewer
+voxhelm serve                                             # full web studio
+```
+
+See `docs/cli_usage.md` for the full reference.
+
+### Flutter Package
+
+```dart
+import 'package:voxhelm_avatar/voxhelm_avatar.dart';
+
+final visemeSet = await VisemeSet.fromAssetBundle(context, 'assets/heads/young_woman');
+final ctrl = VisemeController()..setTimeline(timeline);
+final blink = BlinkController()..start();
+
+VoxhelmAvatar(visemeSet: visemeSet, controller: ctrl, blinkController: blink, size: 200)
+
+// Drive from your audio player:
+ctrl.tick(audioPositionSeconds);
+```
+
+See `voxhelm_avatar/README.md` for the full API reference.
+
+### Library API (Python)
+
+```python
+from voxhelm import load_env
+from voxhelm.core.generator import generate, load_svgs
+from voxhelm.core.audio import deepgram_tts, deepgram_stt_words
+from voxhelm.core.timeline import words_to_timeline
+from voxhelm.server.app import create_app  # FastAPI app
+
+load_env()
+gallery = generate(style="young woman, cartoon", name="test", skip_existing=True)
+svgs = load_svgs(Path("outputs/heads/test"))
+```
 
 ---
 
@@ -400,13 +586,11 @@ HTML parser and silently kill all JavaScript.
 
 ### Near term
 
-**Flutter integration:** Wire the SVG avatar into the ClaWTalk Flutter app (Voxhelm).
+**Voice gateway integration:** Wire the Voxhelm avatar into the Flutter app.
 See `docs/flutter_integration.md` for the full plan. Key steps:
-- Add `clawtalk_avatar` Flutter package (`flutter_svg` + `VisemeController` + `BlinkController`)
 - Add ElevenLabs TTS client to voice-gateway with character-level alignment output
 - Add `phoneme_timeline` WebSocket message type carrying `{t, viseme}` events to Flutter
-- Mount `ClaWTalkAvatar` widget in `CallScreen` alongside existing `AgentAudioVisualizer`
-- ~4.5 days for production-ready integration; ~2 days for a bundled demo
+- Mount `VoxhelmAvatar` widget in `CallScreen` alongside existing `AgentAudioVisualizer`
 
 **End-to-end photorealistic avatar pipeline (RunPod):**
 1. Start the RunPod pod
@@ -460,6 +644,22 @@ pattern; adapt the remote script to use `model.generate_t2svg()` instead.
 ## Project structure
 
 ```
+voxhelm/                    Python package — CLI + core library + server
+  core/                     Core functions (generator, audio, timeline, visemes, presets)
+  cli/main.py               Typer CLI (generate, speak, validate, serve)
+  server/app.py             FastAPI server (same API as webapp/server.py)
+  viewer/viewer.html        Test harness HTML for validate command
+
+voxhelm_avatar/             Flutter package — drop-in SVG avatar widget
+  lib/src/
+    avatar_widget.dart      VoxhelmAvatar widget (flutter_svg + blink overlay)
+    viseme_controller.dart  Timeline or stream-driven frame switching
+    blink_controller.dart   Idle eye-blink animation (200ms, 4-9s interval)
+    models/                 PhonemeEvent, PhonemeTimeline, VisemeSet
+  example/                  Demo app with bundled assets
+
+pyproject.toml              Python package config (pip install -e .)
+
 demo.html                   Browser lipsync demo (SVG cartoon + Deepgram audio)
 morph_demo.html             Browser lipsync demo (Flash Image stills + MediaPipe morph)
 svg_generator.py            Parametric SVG face generator (15 visemes)
@@ -532,21 +732,21 @@ RUNPOD_API_KEY=...
 RUNPOD_POD_ID=...
 COMFYUI_URL=...           # set after starting the pod
 
-# ── Claude SVG head generation ──────────────────────────────────────────────
-pip install anthropic
+# ── Voxhelm CLI (recommended) ─────────────────────────────────────────────
+pip install -e .                                    # or: pip install -e ".[all]"
+voxhelm generate --preset young_woman               # generate 15 SVGs
+voxhelm generate --list-presets                      # see all presets
+voxhelm speak --head young_woman --text "Hello"      # audio + timeline demo
+voxhelm validate --head young_woman                  # web viewer
+voxhelm serve                                        # web studio on :7432
 
-# Generate a single character (15 viseme SVGs)
+# ── Legacy scripts (still work) ───────────────────────────────────────────
 python scripts/generate_head.py --preset young_woman
-python scripts/generate_head.py --style "robot with glowing eyes, teal accent, flat design"
-
-# Generate all 6 preset characters
 python scripts/generate_heads_batch.py --skip-existing
-
-# Audio-driven demo (requires DEEPGRAM_API_KEY)
 python scripts/viseme_demo.py
 open outputs/viseme_demo.html
 
-# ── Head studio web app ───────────────────────────────────────────────────
+# ── Head studio web app (legacy) ──────────────────────────────────────────
 pip install fastapi "uvicorn[standard]"
 python webapp/server.py
 open http://localhost:7432

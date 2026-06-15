@@ -1,0 +1,107 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Background -->
+  <rect width="512" height="512" fill="#FFF5E6" rx="20"/>
+  
+  <!-- Neck -->
+  <rect x="220" y="360" width="72" height="60" fill="#F5C5A3" rx="5"/>
+  
+  <!-- Shoulders -->
+  <path d="M120 440 Q150 390 220 400 L292 400 Q362 390 392 440 L400 512 L112 512 Z" fill="#5B8EC2" rx="10"/>
+  
+  <!-- Shirt collar -->
+  <path d="M220 400 L240 430 L256 415 L272 430 L292 400" fill="#4A7DB1" stroke="none"/>
+  
+  <!-- Ears -->
+  <!-- Left ear -->
+  <ellipse cx="128" cy="260" rx="22" ry="32" fill="#F5C5A3"/>
+  <ellipse cx="132" cy="260" rx="12" ry="20" fill="#E8A882"/>
+  
+  <!-- Right ear -->
+  <ellipse cx="384" cy="260" rx="22" ry="32" fill="#F5C5A3"/>
+  <ellipse cx="380" cy="260" rx="12" ry="20" fill="#E8A882"/>
+  
+  <!-- Head/Face -->
+  <ellipse cx="256" cy="250" rx="130" ry="150" fill="#FACDA0"/>
+  
+  <!-- Hair base (dark brown/black) -->
+  <path d="M126 220 Q126 100 256 90 Q386 100 386 220 L386 180 Q386 95 256 80 Q126 95 126 180 Z" fill="#3A2A1A"/>
+  
+  <!-- Hair top volume -->
+  <path d="M120 200 Q120 85 256 72 Q392 85 392 200 Q390 150 360 120 Q320 90 256 82 Q192 90 152 120 Q125 150 120 200 Z" fill="#4A3828"/>
+  
+  <!-- Hair side left -->
+  <path d="M126 180 Q126 130 160 110 Q140 140 135 180 Q132 200 130 220 L126 220 Z" fill="#3A2A1A"/>
+  
+  <!-- Hair side right -->
+  <path d="M386 180 Q386 130 352 110 Q372 140 377 180 Q380 200 382 220 L386 220 Z" fill="#3A2A1A"/>
+  
+  <!-- Hair front fringe -->
+  <path d="M150 170 Q160 120 210 105 Q240 95 256 95 Q272 95 302 105 Q352 120 362 170 Q350 135 310 118 Q270 105 256 105 Q242 105 202 118 Q162 135 150 170 Z" fill="#2E1F10"/>
+  
+  <!-- Eyebrows -->
+  <!-- Left eyebrow -->
+  <path d="M175 195 Q195 182 225 188" stroke="#3A2A1A" stroke-width="5" fill="none" stroke-linecap="round"/>
+  <!-- Right eyebrow -->
+  <path d="M287 188 Q317 182 337 195" stroke="#3A2A1A" stroke-width="5" fill="none" stroke-linecap="round"/>
+  
+  <!-- Eyes -->
+  <!-- Left eye white -->
+  <ellipse cx="200" cy="235" rx="30" ry="24" fill="white"/>
+  <!-- Left iris -->
+  <ellipse cx="203" cy="237" rx="16" ry="18" fill="#5A8E4A"/>
+  <!-- Left pupil -->
+  <ellipse cx="205" cy="238" rx="8" ry="9" fill="#1A1A1A"/>
+  <!-- Left eye highlight -->
+  <ellipse cx="210" cy="230" rx="5" ry="4" fill="white" opacity="0.9"/>
+  <!-- Left eye outline -->
+  <ellipse cx="200" cy="235" rx="30" ry="24" fill="none" stroke="#2E1F10" stroke-width="2.5"/>
+  <!-- Left eyelid line -->
+  <path d="M170 230 Q200 215 230 230" stroke="#2E1F10" stroke-width="2" fill="none"/>
+  
+  <!-- Right eye white -->
+  <ellipse cx="312" cy="235" rx="30" ry="24" fill="white"/>
+  <!-- Right iris -->
+  <ellipse cx="309" cy="237" rx="16" ry="18" fill="#5A8E4A"/>
+  <!-- Right pupil -->
+  <ellipse cx="307" cy="238" rx="8" ry="9" fill="#1A1A1A"/>
+  <!-- Right eye highlight -->
+  <ellipse cx="314" cy="230" rx="5" ry="4" fill="white" opacity="0.9"/>
+  <!-- Right eye outline -->
+  <ellipse cx="312" cy="235" rx="30" ry="24" fill="none" stroke="#2E1F10" stroke-width="2.5"/>
+  <!-- Right eyelid line -->
+  <path d="M282 230 Q312 215 342 230" stroke="#2E1F10" stroke-width="2" fill="none"/>
+  
+  <!-- Nose -->
+  <path d="M248 280 Q256 292 264 280" stroke="#D4956B" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <path d="M244 278 Q248 283 248 280" stroke="#D4956B" stroke-width="2" fill="none" stroke-linecap="round"/>
+  <path d="M264 280 Q264 283 268 278" stroke="#D4956B" stroke-width="2" fill="none" stroke-linecap="round"/>
+  
+  <!-- Cheek blush -->
+  <ellipse cx="175" cy="290" rx="22" ry="12" fill="#F0A88C" opacity="0.35"/>
+  <ellipse cx="337" cy="290" rx="22" ry="12" fill="#F0A88C" opacity="0.35"/>
+  
+  <!-- TH Mouth - slightly parted lips with tongue tip visible -->
+  <!-- Mouth opening / dark interior -->
+  <path d="M224 325 Q240 320 256 322 Q272 320 288 325 Q280 340 256 342 Q232 340 224 325 Z" fill="#3D1515"/>
+  
+  <!-- Upper lip -->
+  <path d="M220 325 Q230 318 244 320 Q252 316 256 316 Q260 316 268 320 Q282 318 292 325 Q280 322 268 324 Q260 320 256 320 Q252 320 244 324 Q232 322 220 325 Z" fill="#E07060" stroke="#C45A4A" stroke-width="1"/>
+  
+  <!-- Upper teeth row -->
+  <path d="M232 325 Q244 323 256 324 Q268 323 280 325 L280 332 Q268 330 256 331 Q244 330 232 332 Z" fill="#F5F0EB"/>
+  <!-- Teeth line separations -->
+  <line x1="248" y1="325" x2="248" y2="331" stroke="#DDD8D2" stroke-width="0.8"/>
+  <line x1="256" y1="324" x2="256" y2="331" stroke="#DDD8D2" stroke-width="0.8"/>
+  <line x1="264" y1="325" x2="264" y2="331" stroke="#DDD8D2" stroke-width="0.8"/>
+  
+  <!-- Tongue tip visible between teeth -->
+  <path d="M244 332 Q250 337 256 338 Q262 337 268 332 Q264 340 256 342 Q248 340 244 332 Z" fill="#E06858"/>
+  <!-- Tongue highlight -->
+  <path d="M250 335 Q256 338 262 335 Q260 339 256 340 Q252 339 250 335 Z" fill="#EC8070" opacity="0.6"/>
+  
+  <!-- Lower lip -->
+  <path d="M224 340 Q232 345 244 346 Q252 348 256 348 Q260 348 268 346 Q280 345 288 340 Q282 350 268 352 Q260 354 256 354 Q252 354 244 352 Q230 350 224 340 Z" fill="#D86050" stroke="#C04A3A" stroke-width="0.8"/>
+  
+  <!-- Lower lip highlight -->
+  <path d="M240 346 Q248 350 256 351 Q264 350 272 346 Q268 352 256 353 Q244 352 240 346 Z" fill="#E88878" opacity="0.4"/>
+</svg>

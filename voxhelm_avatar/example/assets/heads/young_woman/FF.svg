@@ -1,0 +1,107 @@
+<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="512" height="512" fill="#FFF5E6"/>
+  
+  <!-- Hair back -->
+  <ellipse cx="256" cy="260" rx="155" ry="180" fill="#8B3A1A"/>
+  
+  <!-- Long hair strands falling down -->
+  <path d="M101 260 C95 320, 90 380, 105 460 L140 460 C130 380, 125 320, 130 260 Z" fill="#8B3A1A"/>
+  <path d="M411 260 C417 320, 422 380, 407 460 L372 460 C382 380, 387 320, 382 260 Z" fill="#8B3A1A"/>
+  <path d="M120 280 C110 340, 108 400, 120 460 L155 460 C145 400, 140 340, 145 280 Z" fill="#7A3218"/>
+  <path d="M392 280 C402 340, 404 400, 392 460 L357 460 C367 400, 372 340, 367 280 Z" fill="#7A3218"/>
+  
+  <!-- Neck -->
+  <rect x="226" y="370" width="60" height="60" fill="#FDDCB5"/>
+  <path d="M226 370 Q256 390, 286 370 L286 430 L226 430 Z" fill="#FDDCB5"/>
+  
+  <!-- Shoulders -->
+  <path d="M180 430 Q256 415, 332 430 Q340 470, 350 512 L162 512 Q170 470, 180 430 Z" fill="#E85D4A"/>
+  
+  <!-- Collar detail -->
+  <path d="M226 430 Q256 450, 286 430" fill="none" stroke="#C94535" stroke-width="2"/>
+  
+  <!-- Face shape -->
+  <ellipse cx="256" cy="265" rx="120" ry="135" fill="#FDDCB5"/>
+  
+  <!-- Ears -->
+  <ellipse cx="136" cy="275" rx="18" ry="25" fill="#FDDCB5"/>
+  <ellipse cx="136" cy="275" rx="10" ry="15" fill="#F5C9A0"/>
+  <ellipse cx="376" cy="275" rx="18" ry="25" fill="#FDDCB5"/>
+  <ellipse cx="376" cy="275" rx="10" ry="15" fill="#F5C9A0"/>
+  
+  <!-- Freckles -->
+  <circle cx="215" cy="290" r="3" fill="#D4A574" opacity="0.6"/>
+  <circle cx="225" cy="295" r="2.5" fill="#D4A574" opacity="0.5"/>
+  <circle cx="208" cy="298" r="2" fill="#D4A574" opacity="0.5"/>
+  <circle cx="220" cy="285" r="2" fill="#D4A574" opacity="0.4"/>
+  <circle cx="297" cy="290" r="3" fill="#D4A574" opacity="0.6"/>
+  <circle cx="287" cy="295" r="2.5" fill="#D4A574" opacity="0.5"/>
+  <circle cx="304" cy="298" r="2" fill="#D4A574" opacity="0.5"/>
+  <circle cx="292" cy="285" r="2" fill="#D4A574" opacity="0.4"/>
+  
+  <!-- Eyebrows -->
+  <path d="M195 210 Q220 198, 245 205" fill="none" stroke="#5C2810" stroke-width="5" stroke-linecap="round"/>
+  <path d="M267 205 Q292 198, 317 210" fill="none" stroke="#5C2810" stroke-width="5" stroke-linecap="round"/>
+  
+  <!-- Eyes - whites -->
+  <ellipse cx="220" cy="250" rx="28" ry="26" fill="white"/>
+  <ellipse cx="292" cy="250" rx="28" ry="26" fill="white"/>
+  
+  <!-- Eyes - iris -->
+  <ellipse cx="222" cy="253" rx="16" ry="18" fill="#4A8B5C"/>
+  <ellipse cx="294" cy="253" rx="16" ry="18" fill="#4A8B5C"/>
+  
+  <!-- Eyes - pupils -->
+  <circle cx="224" cy="253" r="8" fill="#1A1A1A"/>
+  <circle cx="296" cy="253" r="8" fill="#1A1A1A"/>
+  
+  <!-- Eye highlights -->
+  <circle cx="228" cy="246" r="4" fill="white"/>
+  <circle cx="300" cy="246" r="4" fill="white"/>
+  <circle cx="220" cy="258" r="2" fill="white" opacity="0.6"/>
+  <circle cx="292" cy="258" r="2" fill="white" opacity="0.6"/>
+  
+  <!-- Eyelashes -->
+  <path d="M192 240 Q190 235, 188 232" fill="none" stroke="#3A1A0A" stroke-width="2" stroke-linecap="round"/>
+  <path d="M248 240 Q250 235, 252 232" fill="none" stroke="#3A1A0A" stroke-width="2" stroke-linecap="round"/>
+  <path d="M264 240 Q262 235, 260 232" fill="none" stroke="#3A1A0A" stroke-width="2" stroke-linecap="round"/>
+  <path d="M320 240 Q322 235, 324 232" fill="none" stroke="#3A1A0A" stroke-width="2" stroke-linecap="round"/>
+  
+  <!-- Nose -->
+  <path d="M252 290 Q256 300, 260 290" fill="none" stroke="#E8B090" stroke-width="3" stroke-linecap="round"/>
+  
+  <!-- Mouth - FF viseme: upper teeth resting on lower lip -->
+  <!-- Lower lip (slightly visible beneath teeth) -->
+  <path d="M232 340 Q256 352, 280 340" fill="#D4595A" stroke="none"/>
+  
+  <!-- Mouth opening / gap between teeth and lower lip -->
+  <path d="M235 336 Q256 340, 277 336 L277 342 Q256 348, 235 342 Z" fill="#5C1A1A"/>
+  
+  <!-- Upper teeth resting on lower lip -->
+  <rect x="235" y="332" width="42" height="10" rx="2" fill="white"/>
+  <!-- Tooth line divisions -->
+  <line x1="249" y1="332" x2="249" y2="342" stroke="#E8E0D8" stroke-width="1"/>
+  <line x1="256" y1="332" x2="256" y2="342" stroke="#E8E0D8" stroke-width="1"/>
+  <line x1="263" y1="332" x2="263" y2="342" stroke="#E8E0D8" stroke-width="1"/>
+  
+  <!-- Upper lip line -->
+  <path d="M232 332 Q244 328, 256 330 Q268 328, 280 332" fill="none" stroke="#C94848" stroke-width="2.5" stroke-linecap="round"/>
+  
+  <!-- Lower lip highlight -->
+  <path d="M242 345 Q256 350, 270 345" fill="#E86A6A" opacity="0.4"/>
+  
+  <!-- Hair front -->
+  <path d="M145 200 Q160 140, 210 120 Q240 110, 256 108 Q272 110, 302 120 Q352 140, 367 200 Q360 170, 330 155 Q290 135, 256 133 Q222 135, 182 155 Q152 170, 145 200 Z" fill="#8B3A1A"/>
+  
+  <!-- Hair bangs/fringe -->
+  <path d="M160 210 Q170 160, 200 140 Q210 135, 220 150 Q215 170, 210 200 Z" fill="#9B4420"/>
+  <path d="M190 200 Q200 150, 230 132 Q240 128, 245 140 Q240 160, 235 195 Z" fill="#8B3A1A"/>
+  <path d="M225 190 Q235 140, 258 128 Q270 128, 280 140 Q275 160, 275 190 Z" fill="#9B4420"/>
+  <path d="M265 195 Q275 145, 300 135 Q310 132, 315 145 Q310 165, 305 200 Z" fill="#8B3A1A"/>
+  <path d="M300 200 Q315 155, 340 148 Q352 150, 355 165 Q345 180, 340 210 Z" fill="#9B4420"/>
+  
+  <!-- Cheek blush -->
+  <ellipse cx="195" cy="300" rx="18" ry="12" fill="#F5A08A" opacity="0.35"/>
+  <ellipse cx="317" cy="300" rx="18" ry="12" fill="#F5A08A" opacity="0.35"/>
+</svg>

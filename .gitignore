@@ -1,6 +1,6 @@
 __pycache__/
 *.pyc
-models/
+/models/
 .claude/
 .env
 avatar_demo/build/

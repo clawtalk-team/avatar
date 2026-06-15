@@ -1,0 +1,14 @@
+name: voxhelm_avatar
+description: SVG talking avatar widget with viseme-driven lip-sync and idle blink animation.
+version: 0.1.0
+publish_to: 'none'
+
+environment:
+  sdk: ^3.11.0
+  flutter: ">=3.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_svg: ^2.0.10+1
+  http: ^1.0.0
