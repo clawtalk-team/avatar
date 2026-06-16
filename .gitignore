@@ -1,9 +1,37 @@
 __pycache__/
 *.pyc
-models/
+/models/
 .claude/
 .env
 avatar_demo/build/
 .gstack/
 .venv-landmarks/
 outputs/flashimage/*.png
+outputs/heads/
+outputs/algorithmic-art/
+outputs/viseme_cache/
+outputs/webapp_cache/
+outputs/.validate/
+.venv/
+
+# OS
+.DS_Store
+
+# Python build artifacts
+*.egg-info/
+dist/
+build/
+
+# Flutter / Dart
+.dart_tool/
+.metadata
+*.iml
+.idea/
+voxhelm_avatar/pubspec.lock
+
+# Generated platform scaffolding (regenerable via flutter create)
+voxhelm_avatar/example/macos/
+voxhelm_avatar/example/test/
+
+# Dead-end spikes
+star-vector/

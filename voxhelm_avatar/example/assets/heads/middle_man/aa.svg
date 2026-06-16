@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Background -->
+  <rect width="512" height="512" fill="#E8F0FE" rx="20"/>
+  
+  <!-- Neck -->
+  <rect x="218" y="360" width="76" height="60" rx="8" fill="#8B6B4E"/>
+  
+  <!-- Shoulders -->
+  <path d="M120 440 Q140 390 256 400 Q372 390 392 440 L400 512 L112 512 Z" fill="#3A5BA0"/>
+  
+  <!-- Collar -->
+  <path d="M200 400 Q256 430 312 400 Q290 420 256 415 Q222 420 200 400Z" fill="#2E4A80"/>
+  
+  <!-- Ears -->
+  <ellipse cx="112" cy="250" rx="28" ry="35" fill="#8B6B4E"/>
+  <ellipse cx="112" cy="250" rx="16" ry="22" fill="#7A5C40"/>
+  <ellipse cx="400" cy="250" rx="28" ry="35" fill="#8B6B4E"/>
+  <ellipse cx="400" cy="250" rx="16" ry="22" fill="#7A5C40"/>
+  
+  <!-- Head shape -->
+  <ellipse cx="256" cy="235" rx="140" ry="165" fill="#9B7B5E"/>
+  
+  <!-- Hair - slightly receding, salt and pepper -->
+  <path d="M116 210 Q120 100 200 65 Q256 45 312 65 Q392 100 396 210 Q380 160 340 130 Q300 108 256 105 Q212 108 172 130 Q132 160 116 210Z" fill="#3D3530"/>
+  <!-- Gray streaks in hair -->
+  <path d="M160 170 Q180 130 220 115 Q200 140 185 170Z" fill="#8A8480" opacity="0.6"/>
+  <path d="M340 155 Q330 125 300 110 Q320 130 330 155Z" fill="#8A8480" opacity="0.6"/>
+  <path d="M256 105 Q270 100 285 108 Q270 112 256 110Z" fill="#8A8480" opacity="0.5"/>
+  
+  <!-- Slight temple graying -->
+  <path d="M125 200 Q130 170 150 150 Q135 175 130 200Z" fill="#9A9590" opacity="0.5"/>
+  <path d="M387 200 Q382 170 362 150 Q377 175 382 200Z" fill="#9A9590" opacity="0.5"/>
+  
+  <!-- Eyebrows -->
+  <path d="M170 185 Q195 170 230 178" stroke="#3D3530" stroke-width="5" fill="none" stroke-linecap="round"/>
+  <path d="M282 178 Q317 170 342 185" stroke="#3D3530" stroke-width="5" fill="none" stroke-linecap="round"/>
+  
+  <!-- Eye whites -->
+  <ellipse cx="200" cy="225" rx="32" ry="24" fill="white"/>
+  <ellipse cx="312" cy="225" rx="32" ry="24" fill="white"/>
+  
+  <!-- Irises -->
+  <ellipse cx="204" cy="227" rx="16" ry="18" fill="#4A3520"/>
+  <ellipse cx="316" cy="227" rx="16" ry="18" fill="#4A3520"/>
+  
+  <!-- Pupils -->
+  <circle cx="206" cy="225" r="7" fill="#1A1008"/>
+  <circle cx="318" cy="225" r="7" fill="#1A1008"/>
+  
+  <!-- Eye highlights -->
+  <circle cx="210" cy="220" r="4" fill="white" opacity="0.9"/>
+  <circle cx="322" cy="220" r="4" fill="white" opacity="0.9"/>
+  <circle cx="200" cy="230" r="2" fill="white" opacity="0.5"/>
+  <circle cx="312" cy="230" r="2" fill="white" opacity="0.5"/>
+  
+  <!-- Upper eyelids - slight crease -->
+  <path d="M168 218 Q200 205 232 218" stroke="#7A5C40" stroke-width="2" fill="none"/>
+  <path d="M280 218 Q312 205 344 218" stroke="#7A5C40" stroke-width="2" fill="none"/>
+  
+  <!-- Nose -->
+  <path d="M256 240 Q248 275 238 290 Q248 298 256 300 Q264 298 274 290 Q264 275 256 240" fill="#876550" opacity="0.7"/>
+  <circle cx="242" cy="292" r="5" fill="#876550" opacity="0.4"/>
+  <circle cx="270" cy="292" r="5" fill="#876550" opacity="0.4"/>
+  
+  <!-- Smile lines / nasolabial folds -->
+  <path d="M215 295 Q210 315 215 340" stroke="#876550" stroke-width="2" fill="none" opacity="0.4"/>
+  <path d="M297 295 Q302 315 297 340" stroke="#876550" stroke-width="2" fill="none" opacity="0.4"/>
+  
+  <!-- Stubble area -->
+  <ellipse cx="256" cy="350" rx="70" ry="40" fill="#5A4A3E" opacity="0.15"/>
+  <rect x="195" y="320" width="122" height="45" rx="15" fill="#5A4A3E" opacity="0.1"/>
+  
+  <!-- Mouth - AA viseme: wide open, jaw dropped -->
+  <ellipse cx="256" cy="340" rx="38" ry="30" fill="#2A1008"/>
+  <!-- Upper lip -->
+  <path d="M218 330 Q230 322 256 320 Q282 322 294 330 Q282 328 256 326 Q230 328 218 330Z" fill="#7A4A3A"/>
+  <!-- Lower lip -->
+  <path d="M220 355 Q238 372 256 374 Q274 372 292 355 Q274 365 256 367 Q238 365 220 355Z" fill="#8A5545"/>
+  <!-- Tongue hint -->
+  <ellipse cx="256" cy="355" rx="22" ry="12" fill="#C45050" opacity="0.7"/>
+  <!-- Teeth top row -->
+  <path d="M228 330 L228 340 Q242 344 256 344 Q270 344 284 340 L284 330 Q270 326 256 326 Q242 326 228 330Z" fill="white" opacity="0.9"/>
+  
+  <!-- Crow's feet / smile lines near eyes -->
+  <path d="M160 235 Q155 240 153 248" stroke="#876550" stroke-width="1.5" fill="none" opacity="0.3"/>
+  <path d="M352 235 Q357 240 359 248" stroke="#876550" stroke-width="1.5" fill="none" opacity="0.3"/>
+</svg>

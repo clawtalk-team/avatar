@@ -93,7 +93,9 @@ async def execute_code(ws_base, kernel_id, code, timeout=120):
 
 
 async def main():
-    pod_id = os.environ.get("RUNPOD_POD_ID", "").strip() or "REDACTED_POD_ID"
+    pod_id = os.environ.get("RUNPOD_POD_ID", "").strip()
+    if not pod_id:
+        print("RUNPOD_POD_ID not set"); return
     api_key = os.environ.get("RUNPOD_API_KEY", "").strip()
 
     base_url = f"https://{pod_id}-8888.proxy.runpod.net"

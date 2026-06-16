@@ -1,0 +1,118 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Background -->
+  <rect width="512" height="512" fill="#FFF5E6"/>
+  
+  <!-- Neck -->
+  <rect x="220" y="390" width="72" height="60" fill="#F0D0B0" rx="10"/>
+  
+  <!-- Shoulders -->
+  <ellipse cx="256" cy="470" rx="120" ry="50" fill="#7B5EA7"/>
+  
+  <!-- Collar/neckline -->
+  <path d="M200 450 Q256 430 312 450" fill="none" stroke="#6B4E97" stroke-width="3"/>
+  
+  <!-- Ears -->
+  <ellipse cx="130" cy="270" rx="22" ry="30" fill="#F0D0B0"/>
+  <ellipse cx="130" cy="270" rx="12" ry="18" fill="#E8C0A0"/>
+  <ellipse cx="382" cy="270" rx="22" ry="30" fill="#F0D0B0"/>
+  <ellipse cx="382" cy="270" rx="12" ry="18" fill="#E8C0A0"/>
+  
+  <!-- Earrings -->
+  <circle cx="130" cy="298" r="5" fill="#D4AF37"/>
+  <circle cx="382" cy="298" r="5" fill="#D4AF37"/>
+  
+  <!-- Face shape -->
+  <ellipse cx="256" cy="270" rx="130" ry="145" fill="#F5DAC0"/>
+  
+  <!-- Wrinkles - forehead -->
+  <path d="M200 180 Q256 175 312 180" fill="none" stroke="#E0C0A0" stroke-width="1.5" opacity="0.6"/>
+  <path d="M210 195 Q256 190 302 195" fill="none" stroke="#E0C0A0" stroke-width="1.5" opacity="0.6"/>
+  
+  <!-- Wrinkles - crow's feet left -->
+  <path d="M160 255 Q150 248 145 240" fill="none" stroke="#E0C0A0" stroke-width="1.2" opacity="0.5"/>
+  <path d="M160 260 Q148 258 143 255" fill="none" stroke="#E0C0A0" stroke-width="1.2" opacity="0.5"/>
+  
+  <!-- Wrinkles - crow's feet right -->
+  <path d="M352 255 Q362 248 367 240" fill="none" stroke="#E0C0A0" stroke-width="1.2" opacity="0.5"/>
+  <path d="M352 260 Q364 258 369 255" fill="none" stroke="#E0C0A0" stroke-width="1.2" opacity="0.5"/>
+  
+  <!-- Nasolabial folds -->
+  <path d="M218 300 Q215 320 222 345" fill="none" stroke="#E0C0A0" stroke-width="1.5" opacity="0.5"/>
+  <path d="M294 300 Q297 320 290 345" fill="none" stroke="#E0C0A0" stroke-width="1.5" opacity="0.5"/>
+  
+  <!-- Rosy cheeks -->
+  <ellipse cx="190" cy="310" rx="28" ry="20" fill="#F5A0A0" opacity="0.4"/>
+  <ellipse cx="322" cy="310" rx="28" ry="20" fill="#F5A0A0" opacity="0.4"/>
+  
+  <!-- Eyes - whites -->
+  <ellipse cx="205" cy="260" rx="28" ry="22" fill="white"/>
+  <ellipse cx="307" cy="260" rx="28" ry="22" fill="white"/>
+  
+  <!-- Eyes - iris -->
+  <circle cx="208" cy="262" r="14" fill="#5B8C5A"/>
+  <circle cx="310" cy="262" r="14" fill="#5B8C5A"/>
+  
+  <!-- Eyes - pupils -->
+  <circle cx="210" cy="264" r="7" fill="#2D2D2D"/>
+  <circle cx="312" cy="264" r="7" fill="#2D2D2D"/>
+  
+  <!-- Eyes - highlights -->
+  <circle cx="214" cy="258" r="4" fill="white"/>
+  <circle cx="316" cy="258" r="4" fill="white"/>
+  
+  <!-- Eyelids - upper -->
+  <path d="M175 252 Q205 238 235 252" fill="none" stroke="#8B6B50" stroke-width="3" stroke-linecap="round"/>
+  <path d="M277 252 Q307 238 337 252" fill="none" stroke="#8B6B50" stroke-width="3" stroke-linecap="round"/>
+  
+  <!-- Eyelashes -->
+  <path d="M175 252 Q172 246 170 242" fill="none" stroke="#8B6B50" stroke-width="2" stroke-linecap="round"/>
+  <path d="M337 252 Q340 246 342 242" fill="none" stroke="#8B6B50" stroke-width="2" stroke-linecap="round"/>
+  
+  <!-- Eyebrows -->
+  <path d="M178 232 Q205 218 235 228" fill="none" stroke="#9E9E9E" stroke-width="4" stroke-linecap="round"/>
+  <path d="M277 228 Q307 218 334 232" fill="none" stroke="#9E9E9E" stroke-width="4" stroke-linecap="round"/>
+  
+  <!-- Glasses frames (subtle) -->
+  <ellipse cx="205" cy="260" rx="34" ry="28" fill="none" stroke="#A08060" stroke-width="2" opacity="0.4"/>
+  <ellipse cx="307" cy="260" rx="34" ry="28" fill="none" stroke="#A08060" stroke-width="2" opacity="0.4"/>
+  <path d="M239 258 Q256 265 273 258" fill="none" stroke="#A08060" stroke-width="1.5" opacity="0.4"/>
+  
+  <!-- Nose -->
+  <path d="M250 290 Q256 305 262 290" fill="none" stroke="#D4A880" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M245 300 Q256 308 267 300" fill="none" stroke="#D4A880" stroke-width="2" stroke-linecap="round"/>
+  
+  <!-- Mouth - "kk" viseme: open mouth, back of tongue raised, mid-open -->
+  <!-- Outer lip shape - open mouth -->
+  <path d="M228 350 Q240 344 256 344 Q272 344 284 350 Q290 358 288 368 Q280 380 256 382 Q232 380 224 368 Q222 358 228 350 Z" fill="#2D1010"/>
+  <!-- Upper lip -->
+  <path d="M228 350 Q240 344 256 344 Q272 344 284 350 Q272 354 256 354 Q240 354 228 350 Z" fill="#C06060"/>
+  <!-- Lower lip -->
+  <path d="M224 368 Q232 380 256 382 Q280 380 288 368 Q280 374 256 376 Q232 374 224 368 Z" fill="#D07070"/>
+  <!-- Tongue raised at back -->
+  <path d="M234 365 Q244 362 256 362 Q268 362 278 365 Q280 372 272 376 Q264 378 256 378 Q248 378 240 376 Q232 372 234 365 Z" fill="#D05050"/>
+  <!-- Tongue hump (back of tongue raised for k/g) -->
+  <path d="M250 364 Q256 358 262 364 Q268 360 274 365 Q270 368 262 367 Q256 366 250 367 Q246 366 250 364 Z" fill="#C04545"/>
+  <!-- Teeth hint - upper -->
+  <path d="M236 350 Q256 348 276 350 L276 356 Q256 354 236 356 Z" fill="#F8F8F0" opacity="0.8"/>
+  
+  <!-- Hair - silver bun -->
+  <!-- Back hair mass -->
+  <ellipse cx="256" cy="175" rx="135" ry="100" fill="#C8C8D0"/>
+  <!-- Hair sides -->
+  <path d="M126 200 Q120 250 130 280 Q135 250 140 220 Q150 180 180 160 Q150 170 126 200 Z" fill="#B8B8C0"/>
+  <path d="M386 200 Q392 250 382 280 Q377 250 372 220 Q362 180 332 160 Q362 170 386 200 Z" fill="#B8B8C0"/>
+  <!-- Top hair -->
+  <path d="M150 200 Q170 130 256 120 Q342 130 362 200 Q350 160 310 140 Q256 125 202 140 Q162 160 150 200 Z" fill="#D0D0D8"/>
+  <!-- Hair wave lines -->
+  <path d="M170 160 Q200 145 230 155" fill="none" stroke="#A8A8B0" stroke-width="2" opacity="0.6"/>
+  <path d="M270 150 Q300 140 340 160" fill="none" stroke="#A8A8B0" stroke-width="2" opacity="0.6"/>
+  <!-- Bun -->
+  <circle cx="256" cy="120" r="40" fill="#C0C0C8"/>
+  <circle cx="256" cy="120" r="38" fill="#C8C8D0"/>
+  <!-- Bun spiral details -->
+  <path d="M240 110 Q256 100 272 110 Q280 120 272 130 Q256 138 240 130 Q232 120 240 110" fill="none" stroke="#A8A8B0" stroke-width="2" opacity="0.5"/>
+  <path d="M248 115 Q256 110 264 115 Q268 120 264 125 Q256 128 248 125 Q244 120 248 115" fill="none" stroke="#A8A8B0" stroke-width="1.5" opacity="0.5"/>
+  <!-- Hair pin -->
+  <line x1="240" y1="105" x2="235" y2="95" stroke="#D4AF37" stroke-width="2"/>
+  <circle cx="235" cy="93" r="3" fill="#D4AF37"/>
+</svg>

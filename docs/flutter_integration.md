@@ -1,81 +1,102 @@
-# ClaWTalk SVG Avatar — Flutter Integration Guide
+# Voxhelm SVG Avatar — Flutter Integration Guide
 
 ## Overview
 
 The avatar system renders a talking cartoon face by switching between 15 pre-generated SVG frames
 (one per viseme) in sync with a phoneme timeline derived from TTS audio.
-This document covers what to add to the Flutter app and what changes are needed in the
-voice gateway to carry phoneme timestamps downstream.
+This document covers how to use the `voxhelm_avatar` Flutter package and what changes are
+needed in the voice gateway to carry phoneme timestamps downstream.
 
 ---
 
 ## Package structure
 
 ```
-photo-generation/flutter_package/
-  clawtalk_avatar/
-    lib/
-      clawtalk_avatar.dart          # barrel export
-      src/
-        avatar_widget.dart          # main widget
-        viseme_controller.dart      # drives frame switching from timeline
-        blink_controller.dart       # idle eye-blink timer
-        models/
-          viseme_set.dart           # 15 SVG strings + metadata
-          phoneme_event.dart        # {t: double, viseme: String}
-    pubspec.yaml
+voxhelm_avatar/
+  lib/
+    voxhelm_avatar.dart             # barrel export
+    src/
+      avatar_widget.dart            # VoxhelmAvatar widget
+      viseme_controller.dart        # drives frame switching from timeline or stream
+      blink_controller.dart         # idle eye-blink animation
+      models/
+        viseme_set.dart             # 15 SVG strings + loaders
+        phoneme_event.dart          # PhonemeEvent, PhonemeTimeline
+  pubspec.yaml
+  example/                          # demo app with bundled assets
 ```
 
-The package exposes a single `ClaWTalkAvatar` widget that accepts:
-- A `VisemeSet` (loaded from asset bundle or fetched from API)
-- A `Stream<PhonemeEvent>` that drives lip-sync
-- Optional size, border-radius, idle animation settings
+The package exposes a `VoxhelmAvatar` widget that accepts:
+- A `VisemeSet` (loaded from asset bundle, URL, or raw map)
+- A `VisemeController` that drives lip-sync (timeline or stream mode)
+- An optional `BlinkController` for idle eye-blink animation
+- Configurable size, border-radius, eye positions, and eyelid colour
+
+The package has **no audio dependency** — the host app owns audio playback and
+feeds the current position to `VisemeController.tick()`.
 
 ---
 
 ## 1 — Adding the avatar widget to CallScreen
 
-`CallScreen` (`/lib/screens/call_screen.dart`) is where audio plays back. The avatar replaces
-or sits alongside the existing `AgentAudioVisualizer`.
+`CallScreen` (`/lib/screens/call_screen.dart`) is where audio plays back. The avatar
+replaces or sits alongside the existing `AgentAudioVisualizer`.
 
 ### pubspec.yaml additions
 
 ```yaml
 dependencies:
-  flutter_svg: ^2.0.10+1     # renders SVG strings as widgets
-  clawtalk_avatar:
-    path: ../../photo-generation/flutter_package/clawtalk_avatar
+  voxhelm_avatar:
+    path: ../avatar/voxhelm_avatar   # or a git/pub dependency
 ```
+
+(`flutter_svg` is a transitive dependency of `voxhelm_avatar` — no need to add it directly.)
 
 ### Minimal integration
 
 ```dart
-// In call_screen.dart
-import 'package:clawtalk_avatar/clawtalk_avatar.dart';
+import 'package:voxhelm_avatar/voxhelm_avatar.dart';
 
 // Load the viseme set for the active agent (fetched once, cached)
-final visemeSet = await VisemeSet.fromAssetBundle('assets/heads/agent_name');
-// or: VisemeSet.fromApi('https://your-api/heads/agent_name/svgs')
+final visemeSet = await VisemeSet.fromAssetBundle(context, 'assets/heads/young_woman');
+// or: VisemeSet.fromUrl('https://your-api/heads/young_woman/svgs')
+
+// Create controllers
+final visemeCtrl = VisemeController();
+final blinkCtrl = BlinkController()..start();
+
+// Set a timeline (from your phoneme pipeline)
+visemeCtrl.setTimeline(timeline);
 
 // In build():
-ClaWTalkAvatar(
+VoxhelmAvatar(
   visemeSet: visemeSet,
-  events: ref.watch(callProvider).phonemeStream, // see section 3
+  controller: visemeCtrl,
+  blinkController: blinkCtrl,
   size: 200,
+  borderRadius: BorderRadius.circular(16),
 )
+
+// Drive from audio position (in your audio player callback):
+visemeCtrl.tick(audioPositionSeconds);
 ```
 
 ### State management (Riverpod)
 
-Add `phonemeStream` to `CallState`:
+Add `phonemeTimeline` to `CallState` and drive from position changes:
 
 ```dart
-// call_state.dart
-final Stream<PhonemeEvent> phonemeStream;
+// In your audio player callback:
+player.onPositionChanged.listen((pos) {
+  visemeCtrl.tick(pos.inMilliseconds / 1000.0);
+});
 ```
 
-The stream is fed by the voice gateway over the existing WebSocket connection
-(see section 3 for gateway changes).
+For real-time WebSocket-driven visemes (no pre-built timeline):
+
+```dart
+visemeCtrl.bindStream(phonemeEventStream);
+```
 
 ---
 
@@ -94,16 +115,18 @@ flutter:
 ```
 
 ```dart
-// Load from bundle
-final set = await VisemeSet.fromAssetBundle('assets/heads/young_woman');
+// Load from bundle (requires BuildContext)
+final set = await VisemeSet.fromAssetBundle(context, 'assets/heads/young_woman');
 ```
 
 ### Fetch at runtime (recommended for dynamic agent heads)
 
 ```dart
-// On agent selection, fetch from your API or CDN
-final set = await VisemeSet.fromUrl('${config.avatarBaseUrl}/heads/${agent.headId}');
-// Cache with flutter_cache_manager or simple in-memory map
+// From Voxhelm server API (returns JSON map)
+final set = await VisemeSet.fromUrl('${config.avatarBaseUrl}/api/head/${agent.headId}/svgs');
+
+// Or from individual SVG files on a CDN
+final set = await VisemeSet.fromBaseUrl('https://cdn.example.com/heads/${agent.headId}');
 ```
 
 Runtime fetch is better when agents have distinct generated heads; avoids shipping
@@ -136,9 +159,8 @@ delivers `normalizedAlignment` objects in each chunk:
 
 1. Connect to `wss://api.elevenlabs.io/v1/text-to-speech/{voice_id}/stream-input`
    with `xi-api-key` header and `output_format=pcm_24000`.
-2. Accumulate `normalizedAlignment` chunks into a running character→time table.
-3. Map characters → words → phonemes using the same CMU dict the Python demo uses
-   (or a server-side lookup table).
+2. Accumulate `normalizedAlignment` chunks into a running character-to-time table.
+3. Map characters to words to phonemes using CMU dict (or a server-side lookup table).
 4. Emit `PhonemeTimeline` messages on the downstream WebSocket alongside audio frames.
 
 Env var: `TTS_PROVIDER=elevenlabs`, `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`.
@@ -152,12 +174,12 @@ When ElevenLabs is unavailable, keep the existing Deepgram TTS pipeline and run
 Deepgram STT on the PCM output after synthesis to recover word timestamps:
 
 1. Buffer the full TTS audio (already done for metrics).
-2. POST to `https://api.deepgram.com/v1/listen?model=nova-3&timestamps=true`.
-3. Map words → CMU phonemes, distribute evenly within each word's `[start, end]` window.
+2. POST to `https://api.deepgram.com/v1/listen?model=nova-3&words=true`.
+3. Map words to CMU phonemes, distribute evenly within each word's `[start, end]` window.
 4. Send the resulting timeline as a `phoneme_timeline` WebSocket message before the
    first audio frame.
 
-This adds ~300–500ms of latency before audio starts. Acceptable for demo; not for
+This adds ~300-500ms of latency before audio starts. Acceptable for demo; not for
 production < 500ms TTFA targets. Toggle with `TTS_ALIGNMENT=stt_passthrough`.
 
 ### 3c — New WebSocket message type
@@ -172,8 +194,7 @@ Add to the existing message protocol (e.g. `websocket_message.dart` model):
     "events": [
       {"t": 0.000, "v": "sil",  "ph": "silence"},
       {"t": 0.050, "v": "E",    "ph": "HH"},
-      {"t": 0.120, "v": "aa",   "ph": "EH"},
-      ...
+      {"t": 0.120, "v": "aa",   "ph": "EH"}
     ]
   }
 }
@@ -190,90 +211,66 @@ case 'phoneme_timeline':
   final events = (msg.data['events'] as List)
       .map((e) => PhonemeEvent(t: e['t'], viseme: e['v']))
       .toList();
-  _phonemeController.add(PhonemeTimeline(events));
+  final timeline = PhonemeTimeline(events);
+  visemeController.setTimeline(timeline);
   break;
 ```
 
-`VisemeController` in the avatar package subscribes to `PhonemeTimeline`, starts an
-animation loop keyed to the AudioContext/PCM playback position, and drives frame
-switching at each phoneme boundary.
+`VisemeController` then needs `tick(audioPositionSeconds)` called each frame by the
+host app's audio player position callback.
 
 ---
 
 ## 4 — Rendering SVGs in Flutter
 
-`flutter_svg` renders SVG strings as widgets. The avatar widget cycles through them:
+`flutter_svg` renders SVG strings as widgets. The `VoxhelmAvatar` widget manages this
+internally with a pre-parsed cache:
 
 ```dart
 // avatar_widget.dart (simplified)
-class ClaWTalkAvatar extends StatefulWidget { ... }
-
-class _ClaWTalkAvatarState extends State<ClaWTalkAvatar> {
-  String _currentViseme = 'sil';
-
-  @override
-  void initState() {
-    super.initState();
-    widget.events.listen(_onEvent);
-    _startBlink();
-  }
-
-  void _onEvent(PhonemeEvent e) {
-    setState(() => _currentViseme = e.viseme);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final svg = widget.visemeSet.svgs[_currentViseme] ?? widget.visemeSet.svgs['sil']!;
-    return Stack(children: [
-      SvgPicture.string(svg, width: widget.size, height: widget.size),
-      _BlinkOverlay(size: widget.size),  // eye-blink layer
-    ]);
-  }
+class VoxhelmAvatar extends StatefulWidget {
+  final VisemeSet visemeSet;
+  final VisemeController controller;
+  final BlinkController? blinkController;
+  final double size;
+  final BorderRadius? borderRadius;
+  final Color backgroundColor;
+  // Eye position config for blink overlay (512x512 SVG space)
+  final Offset leftEyeCenter;   // default (210, 240)
+  final Offset rightEyeCenter;  // default (302, 240)
+  final double eyeRadiusX;      // default 30
+  final double eyeRadiusY;      // default 28
+  final Color eyelidColor;      // default skin tone
+  ...
 }
 ```
 
-**Performance**: `SvgPicture.string` parses SVG on each frame switch. Pre-parse with
-`SvgPicture.string(...).createRenderObject(context)` or cache as `DrawableRoot`
-to avoid per-switch parse cost. At 15 visemes this is a one-time 15-parse cache.
+Internally, `_buildSvgCache()` pre-parses all 15 SVGs via `SvgPicture.string()` on load.
+Frame switching is an instant widget swap — no per-frame parse cost. The cache rebuilds
+automatically when `visemeSet` or `size` changes.
 
 ---
 
 ## 5 — Blink layer
 
 The blink overlay is a `CustomPainter` that draws two skin-coloured ellipses over the
-eye positions, animating `ry` from 0→28→0 on a random 4–9s timer:
+eye positions, driven by `BlinkController`:
 
 ```dart
-// blink_controller.dart
-class BlinkController extends ChangeNotifier {
-  double eyeRy = 0;
-  Timer? _timer;
+final blinkCtrl = BlinkController()..start();
 
-  void start() => _scheduleNext();
-
-  void _scheduleNext() {
-    final delay = Duration(milliseconds: 4000 + Random().nextInt(5000));
-    _timer = Timer(delay, _doBlink);
-  }
-
-  void _doBlink() {
-    // 10 steps × 20ms = 200ms blink
-    const steps = [0, 7, 14, 21, 28, 28, 21, 14, 7, 0];
-    for (var i = 0; i < steps.length; i++) {
-      Future.delayed(Duration(milliseconds: i * 20), () {
-        eyeRy = steps[i].toDouble();
-        notifyListeners();
-      });
-    }
-    Future.delayed(const Duration(milliseconds: 200), _scheduleNext);
-  }
-}
+// BlinkController exposes:
+blinkCtrl.eyeClosedness  // 0.0 (open) → 1.0 (closed)
+blinkCtrl.start()        // begin blink loop
+blinkCtrl.stop()         // stop and reset to open
 ```
 
-The eye positions (cx=210/302, cy=240, rx=30 in 512×512 SVG viewBox) are constants
-from the character generation prompt. If the prompt changes significantly, re-calibrate
-these values against a generated `sil.svg` sample.
+Blink cycle: 10 steps x 20ms = 200ms. Random 4-9s interval between blinks, with a
+25% chance of a double-blink.
+
+The eye positions (cx=210/302, cy=240, rx=30 in 512x512 SVG viewBox) are configurable
+via the `VoxhelmAvatar` widget's `leftEyeCenter`, `rightEyeCenter`, `eyeRadiusX`,
+`eyeRadiusY`, and `eyelidColor` parameters. Calibrate against your character's `sil.svg`.
 
 ---
 
@@ -285,11 +282,12 @@ AgentAudioVisualizer(height: 80)
 
 // After (avatar + visualizer):
 Column(children: [
-  ClaWTalkAvatar(
+  VoxhelmAvatar(
     visemeSet: ref.watch(agentHeadProvider(agent.id)),
-    events: ref.watch(callProvider).phonemeStream,
+    controller: ref.watch(visemeControllerProvider),
+    blinkController: ref.watch(blinkControllerProvider),
     size: 220,
-    borderRadius: 16,
+    borderRadius: BorderRadius.circular(16),
   ),
   const SizedBox(height: 16),
   AgentAudioVisualizer(height: 60),
@@ -301,16 +299,18 @@ Add `agentHeadProvider` as a `FutureProvider.family` that fetches and caches the
 
 ---
 
-## Summary of work required
+## Summary of remaining work
+
+The `voxhelm_avatar` Flutter package is implemented and ready to import. The remaining
+integration work is on the voice gateway and app plumbing side:
 
 | Area | Work | Effort |
 |------|------|--------|
-| `clawtalk_avatar` Flutter package | Widget + VisemeController + BlinkController | ~1 day |
 | Voice gateway: ElevenLabs TTS | New `elevenlabs.go` TTS client with alignment | ~1 day |
 | Voice gateway: message protocol | Add `phoneme_timeline` message type + publisher | ~0.5 day |
 | Flutter app: consume timeline | `ws_pcm_transport.dart` + Riverpod plumbing | ~0.5 day |
 | Asset loading / caching | `VisemeSet.fromUrl` + agent head API endpoint | ~0.5 day |
 | Testing & calibration | Blink positions, viseme timing, speed | ~1 day |
 
-**Total: ~4.5 days** for a production-ready integration.
-For a quick demo with bundled assets and Deepgram STT fallback: ~2 days.
+**Total: ~3.5 days** for a production-ready integration.
+For a quick demo with bundled assets and Deepgram STT fallback: ~1.5 days.

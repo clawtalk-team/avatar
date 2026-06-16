@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Voxhelm — Head Validator</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#111;color:#eee;font-family:system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;padding:32px 20px}
+  h1{font-size:20px;color:#fff;margin-bottom:4px}
+  .sub{font-size:12px;color:#555;margin-bottom:20px}
+  .tabs{display:flex;gap:2px;margin-bottom:20px}
+  .tab{padding:8px 20px;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;color:#888;cursor:pointer;font-size:13px}
+  .tab.active{background:#1a3a2a;border-color:#2a6;color:#4c9}
+
+  /* Gallery */
+  .gallery{display:flex;flex-wrap:wrap;gap:16px;justify-content:center;max-width:900px}
+  .card{background:#1a1a1a;border:1px solid #2a2a2a;border-radius:12px;padding:10px;text-align:center;width:160px;cursor:pointer;transition:border-color .15s}
+  .card:hover{border-color:#444}
+  .card.active{border-color:#2a6}
+  .card svg{width:140px;height:140px;display:block;margin:0 auto}
+  .card .label{font-size:11px;color:#888;margin-top:4px}
+  .card .label b{color:#7cf}
+
+  /* Preview */
+  .preview{display:flex;flex-direction:column;align-items:center}
+  .stage{width:360px;height:360px;background:#1a1a1a;border-radius:18px;overflow:hidden;position:relative;border:1px solid #2a2a2a}
+  .stage svg{width:100%;height:100%;position:absolute;top:0;left:0;display:none}
+  #blink-overlay{display:block;width:100%;height:100%;position:absolute;top:0;left:0;pointer-events:none;z-index:10}
+  .vis-label{margin-top:12px;font-size:28px;font-weight:700;color:#7cf;min-height:36px}
+  .ph-label{font-size:12px;color:#555;margin-top:2px;min-height:16px;font-family:monospace}
+  .vis-strip{display:flex;flex-wrap:wrap;gap:6px;max-width:500px;justify-content:center;margin-top:16px}
+  .vis-btn{padding:6px 14px;border-radius:8px;font-size:12px;font-weight:600;background:#1e1e1e;color:#888;border:1px solid #2a2a2a;cursor:pointer;font-family:monospace;transition:all .12s}
+  .vis-btn:hover{background:#2a2a2a;border-color:#444}
+  .vis-btn.active{background:#1a3a2a;color:#4c9;border-color:#2a6}
+
+  .section{display:none}
+  .section.visible{display:flex;flex-direction:column;align-items:center}
+  .stats{font-size:13px;color:#888;margin-bottom:16px}
+  .stats b{color:#4c9}
+</style>
+</head>
+<body>
+
+<h1 id="title">Voxhelm Head Validator</h1>
+<p class="sub" id="subtitle">Validating head...</p>
+
+<div class="tabs">
+  <div class="tab active" onclick="showTab('gallery')">Gallery</div>
+  <div class="tab" onclick="showTab('preview')">Preview</div>
+</div>
+
+<div class="section visible" id="sec-gallery">
+  <div class="stats" id="stats"></div>
+  <div class="gallery" id="gallery"></div>
+</div>
+
+<div class="section" id="sec-preview">
+  <div class="stage" id="stage">
+    <svg id="blink-overlay" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+      <ellipse id="lid-l" cx="210" cy="240" rx="30" ry="0" fill="#F5C4A1" stroke="#3D2B1F" stroke-width="2"/>
+      <ellipse id="lid-r" cx="302" cy="240" rx="30" ry="0" fill="#F5C4A1" stroke="#3D2B1F" stroke-width="2"/>
+    </svg>
+  </div>
+  <div class="vis-label" id="vis-label">sil</div>
+  <div class="ph-label" id="ph-label">Click a viseme below</div>
+  <div class="vis-strip" id="vis-strip"></div>
+</div>
+
+<script>
+/*SVGS_PLACEHOLDER*/
+/*HEAD_NAME_PLACEHOLDER*/
+
+const ALL_VISEMES = ['sil','PP','FF','TH','DD','kk','CH','SS','nn','RR','aa','E','I','O','U'];
+const VISEME_PHONEMES = {
+  sil:'silence', PP:'p,b,m', FF:'f,v', TH:'th,dh', DD:'t,d', kk:'k,g',
+  CH:'ch,j,sh', SS:'s,z', nn:'n,l,ng', RR:'r', aa:'ah,aa', E:'eh,ey',
+  I:'ih,iy', O:'oh,ao', U:'oo,uw'
+};
+
+document.getElementById('subtitle').textContent = `Head: ${HEAD_NAME}`;
+const present = Object.keys(SVGS);
+document.getElementById('stats').innerHTML = `<b>${present.length}</b>/15 visemes present: ${present.join(', ')}`;
+
+// ── Gallery tab ──
+const galleryEl = document.getElementById('gallery');
+for (const v of ALL_VISEMES) {
+  const card = document.createElement('div');
+  card.className = 'card' + (SVGS[v] ? '' : ' missing');
+  if (SVGS[v]) {
+    card.innerHTML = SVGS[v] + `<div class="label"><b>${v}</b> — ${VISEME_PHONEMES[v]||''}</div>`;
+    card.onclick = () => { showTab('preview'); showViseme(v); };
+  } else {
+    card.innerHTML = `<div style="height:140px;display:flex;align-items:center;justify-content:center;color:#f66;font-size:13px">missing</div><div class="label"><b>${v}</b></div>`;
+  }
+  galleryEl.appendChild(card);
+}
+
+// ── Preview tab ──
+const stage = document.getElementById('stage');
+const svgEls = {};
+for (const [v, svg] of Object.entries(SVGS)) {
+  const tmp = document.createElement('div');
+  tmp.innerHTML = svg;
+  const el = tmp.firstElementChild;
+  if (el) { el.id = 'svg-' + v; stage.appendChild(el); svgEls[v] = el; }
+}
+
+let curViseme = 'sil';
+function showViseme(v) {
+  if (!svgEls[v]) v = 'sil';
+  if (svgEls[curViseme]) svgEls[curViseme].style.display = 'none';
+  if (svgEls[v]) svgEls[v].style.display = 'block';
+  curViseme = v;
+  document.getElementById('vis-label').textContent = v;
+  document.getElementById('ph-label').textContent = VISEME_PHONEMES[v] || '';
+  document.querySelectorAll('.vis-btn').forEach(b => b.classList.toggle('active', b.dataset.v === v));
+}
+if (svgEls['sil']) svgEls['sil'].style.display = 'block';
+
+const strip = document.getElementById('vis-strip');
+for (const v of ALL_VISEMES) {
+  const btn = document.createElement('button');
+  btn.className = 'vis-btn' + (v === 'sil' ? ' active' : '') + (!SVGS[v] ? ' missing' : '');
+  btn.dataset.v = v;
+  btn.textContent = v;
+  btn.disabled = !SVGS[v];
+  btn.onclick = () => showViseme(v);
+  strip.appendChild(btn);
+}
+
+// ── Tabs ──
+function showTab(name) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('visible'));
+  document.getElementById('sec-' + name).classList.add('visible');
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.textContent.toLowerCase() === name));
+}
+
+// ── Blink ──
+const lidL = document.getElementById('lid-l'), lidR = document.getElementById('lid-r');
+function setLids(ry) { if(lidL) lidL.setAttribute('ry',ry); if(lidR) lidR.setAttribute('ry',ry); }
+const BLINK_STEPS = [0,7,14,21,28,28,21,14,7,0];
+function runBlink(cb) { BLINK_STEPS.forEach((ry,i) => setTimeout(() => setLids(ry), i*20)); setTimeout(cb, BLINK_STEPS.length*20); }
+function scheduleBlink() {
+  setTimeout(() => { runBlink(() => { if (Math.random()<0.25) setTimeout(() => runBlink(scheduleBlink), 250); else scheduleBlink(); }); }, 4000+Math.random()*5000);
+}
+setTimeout(scheduleBlink, 1000+Math.random()*2000);
+
+// ── Auto-cycle for quick validation ──
+let cycling = false;
+document.addEventListener('keydown', e => {
+  if (e.key === ' ') {
+    e.preventDefault();
+    if (cycling) return;
+    cycling = true;
+    let i = 0;
+    const iv = setInterval(() => {
+      if (i >= ALL_VISEMES.length) { clearInterval(iv); cycling = false; showViseme('sil'); return; }
+      if (SVGS[ALL_VISEMES[i]]) showViseme(ALL_VISEMES[i]);
+      i++;
+    }, 500);
+  }
+});
+</script>
+</body>
+</html>
