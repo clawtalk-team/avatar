@@ -216,16 +216,21 @@ voxhelm serve --port 8080 --host 0.0.0.0
 
 ```bash
 voxhelm serve --port 7432
+# OpenAPI docs at http://localhost:7432/docs
 ```
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/api/heads` | List all generated heads |
 | `GET` | `/api/presets` | List character presets |
-| `POST` | `/api/generate-base` | Generate base frame |
-| `POST` | `/api/generate-visemes` | Generate visemes from approved base |
-| `GET` | `/api/head/{name}/assets` | Get all viseme assets |
-| `POST` | `/api/speak` | TTS + viseme timeline |
+| `GET` | `/api/heads` | List all generated heads with metadata |
+| `POST` | `/api/generate-base` | Step 1: generate base frame |
+| `POST` | `/api/generate-visemes` | Step 2: generate visemes from approved base |
+| `POST` | `/api/generate` | One-shot: base + all visemes |
+| `GET` | `/api/head/{name}/assets` | Get all viseme assets (SVG/PNG) |
+| `GET` | `/api/head/{name}/validate` | Get validation gallery HTML |
+| `POST` | `/api/speak` | TTS audio + viseme timeline |
+
+Request bodies use `prompt` (or `preset`) + `mode` (`svg`/`photo`), matching the CLI.
 
 ### Python library
 
