@@ -39,9 +39,9 @@ def _setup_logging(verbose: bool = False) -> None:
 
 
 def _resolve_style_name(
-    preset: str | None, style: str | None, name: str | None,
+    preset: str | None, prompt: str | None, name: str | None,
 ) -> tuple[str, str]:
-    """Resolve style description and output name from preset or custom style."""
+    """Resolve style description and output name from preset or custom prompt."""
     from voxhelm.core.presets import PRESETS
 
     if preset:
@@ -49,11 +49,11 @@ def _resolve_style_name(
             typer.echo(f"Unknown preset: {preset}", err=True)
             raise typer.Exit(1)
         return PRESETS[preset], name or preset
-    elif style:
-        auto_name = re.sub(r"[^a-z0-9]+", "_", style[:40].lower()).strip("_")
-        return style, name or auto_name
+    elif prompt:
+        auto_name = re.sub(r"[^a-z0-9]+", "_", prompt[:40].lower()).strip("_")
+        return prompt, name or auto_name
     else:
-        typer.echo("Provide --style or --preset (or --list-presets to see options)", err=True)
+        typer.echo("Provide --prompt or --preset (or --list-presets to see options)", err=True)
         raise typer.Exit(1)
 
 
@@ -63,7 +63,7 @@ def _resolve_style_name(
 def generate_base(
     mode: str = typer.Option("svg", help="Generation mode: svg (cartoon) or photo (photorealistic)"),
     preset: str = typer.Option(None, help="Use a bundled character preset (svg mode)"),
-    style: str = typer.Option(None, help="Custom style description"),
+    prompt: str = typer.Option(None, "--prompt", help="Character description prompt"),
     name: str = typer.Option(None, help="Output directory name"),
     list_presets: bool = typer.Option(False, "--list-presets", help="List available presets"),
     model: str = typer.Option("claude-opus-4-6", help="Claude model (svg mode only)"),
@@ -89,7 +89,7 @@ def generate_base(
             typer.echo(f"    {v}\n")
         return
 
-    resolved_style, resolved_name = _resolve_style_name(preset, style, name)
+    resolved_style, resolved_name = _resolve_style_name(preset, prompt, name)
     out_root = REPO_ROOT / out
 
     def progress(viseme: str, idx: int, total: int, status: str) -> None:
@@ -186,7 +186,7 @@ def generate_visemes_cmd(
 def generate(
     mode: str = typer.Option("svg", help="Generation mode: svg (cartoon) or photo (photorealistic)"),
     preset: str = typer.Option(None, help="Use a bundled character preset"),
-    style: str = typer.Option(None, help="Custom style description"),
+    prompt: str = typer.Option(None, "--prompt", help="Character description prompt"),
     name: str = typer.Option(None, help="Output directory name"),
     list_presets: bool = typer.Option(False, "--list-presets", help="List available presets"),
     model: str = typer.Option("claude-opus-4-6", help="Claude model (svg mode only)"),
@@ -214,7 +214,7 @@ def generate(
             typer.echo(f"    {v}\n")
         return
 
-    resolved_style, resolved_name = _resolve_style_name(preset, style, name)
+    resolved_style, resolved_name = _resolve_style_name(preset, prompt, name)
     out_root = REPO_ROOT / out
 
     # Save metadata

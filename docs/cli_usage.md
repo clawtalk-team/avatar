@@ -37,7 +37,7 @@ for review before generating all 15 visemes.
 Options:
   --mode TEXT         Generation mode: svg (cartoon) or photo (photorealistic) [default: svg]
   --preset TEXT       Use a bundled character preset
-  --style TEXT        Custom style description
+  --prompt TEXT        Character description prompt
   --name TEXT         Output directory name
   --list-presets      List available presets
   --model TEXT        Claude model (svg mode only) [default: claude-opus-4-6]
@@ -52,7 +52,7 @@ Examples:
 voxhelm generate-base --preset young_woman
 
 # Photorealistic from custom description
-voxhelm generate-base --mode photo --style "woman in her 30s, dark hair, olive skin" --name photo_woman
+voxhelm generate-base --mode photo --prompt "woman in her 30s, dark hair, olive skin" --name photo_woman
 
 # List all presets
 voxhelm generate-base --list-presets
@@ -92,7 +92,7 @@ use `generate-base` + `generate-visemes` instead.
 Options:
   --mode TEXT         Generation mode: svg or photo [default: svg]
   --preset TEXT       Use a bundled character preset
-  --style TEXT        Custom style description
+  --prompt TEXT        Character description prompt
   --name TEXT         Output directory name
   --list-presets      List available presets
   --model TEXT        Claude model (svg mode only) [default: claude-opus-4-6]
@@ -109,7 +109,7 @@ Examples:
 voxhelm generate --preset young_woman
 
 # One-shot photo generation
-voxhelm generate --mode photo --style "friendly man, 40s, short beard" --name bearded_man
+voxhelm generate --mode photo --prompt "friendly man, 40s, short beard" --name bearded_man
 ```
 
 ---

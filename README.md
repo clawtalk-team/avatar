@@ -88,7 +88,7 @@ Or do it all in one shot:
 
 ```bash
 voxhelm generate --preset young_woman
-voxhelm generate --mode photo --style "woman in her 30s, dark hair" --name photo_woman
+voxhelm generate --mode photo --prompt "woman in her 30s, dark hair" --name photo_woman
 ```
 
 ---
@@ -103,7 +103,7 @@ Step 1: Generate the base (sil) frame for a character.
 Options:
   --mode TEXT         svg (cartoon) or photo (photorealistic)  [default: svg]
   --preset TEXT       Bundled character preset
-  --style TEXT        Custom style description
+  --prompt TEXT        Character description prompt
   --name TEXT         Output directory name
   --list-presets      List available presets
   --model TEXT        Claude model, svg mode only  [default: claude-opus-4-6]
@@ -113,7 +113,7 @@ Options:
 
 ```bash
 voxhelm generate-base --preset young_woman
-voxhelm generate-base --mode photo --style "friendly man, 40s, short beard" --name bearded_man
+voxhelm generate-base --mode photo --prompt "friendly man, 40s, short beard" --name bearded_man
 voxhelm generate-base --list-presets
 ```
 
@@ -145,7 +145,7 @@ One-shot: generate all 15 viseme assets (base + visemes). For QA control, use
 Options:
   --mode TEXT         svg or photo  [default: svg]
   --preset TEXT       Bundled character preset
-  --style TEXT        Custom style description
+  --prompt TEXT        Character description prompt
   --name TEXT         Output directory name
   --list-presets      List available presets
   --model TEXT        Claude model, svg mode only  [default: claude-opus-4-6]
@@ -157,7 +157,7 @@ Options:
 
 ```bash
 voxhelm generate --preset young_woman
-voxhelm generate --mode photo --style "woman in her 30s, dark hair" --name photo_woman
+voxhelm generate --mode photo --prompt "woman in her 30s, dark hair" --name photo_woman
 ```
 
 ### `voxhelm speak`
