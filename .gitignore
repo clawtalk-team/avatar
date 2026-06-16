@@ -3,24 +3,19 @@ __pycache__/
 /models/
 .claude/
 .env
-avatar_demo/build/
-.gstack/
-.venv-landmarks/
-outputs/flashimage/*.png
-outputs/heads/
-outputs/algorithmic-art/
-outputs/viseme_cache/
-outputs/webapp_cache/
-outputs/.validate/
-.venv/
 
-# OS
-.DS_Store
+# Generated outputs — all regenerable, don't commit
+outputs/
 
-# Python build artifacts
+# Python
 *.egg-info/
 dist/
 build/
+.venv/
+.venv-*/
+
+# OS
+.DS_Store
 
 # Flutter / Dart
 .dart_tool/
@@ -28,6 +23,7 @@ build/
 *.iml
 .idea/
 voxhelm_avatar/pubspec.lock
+avatar_demo/build/
 
 # Generated platform scaffolding (regenerable via flutter create)
 voxhelm_avatar/example/macos/
@@ -35,3 +31,6 @@ voxhelm_avatar/example/test/
 
 # Dead-end spikes
 star-vector/
+
+# Tools
+.gstack/

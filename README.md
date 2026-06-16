@@ -6,7 +6,7 @@ with audio-synced viseme playback.
 
 ## Features
 
-- **Two rendering modes:** SVG cartoon (Claude) and photorealistic PNG (Gemini Flash Image)
+- **Two rendering modes:** SVG cartoon (via Claude) and photorealistic PNG (via Gemini Flash Image)
 - **15 OVR visemes** per character with identity-locked generation
 - **Audio-driven animation** via Deepgram TTS/STT + phoneme-to-viseme mapping
 - **Split workflow:** generate base → review → generate visemes
@@ -14,23 +14,26 @@ with audio-synced viseme playback.
 - **API-ready** FastAPI server with REST endpoints
 - **Flutter widget** for mobile/desktop integration (`voxhelm_avatar` package)
 
+---
+
 ## Install
 
 ```bash
-# Clone and install
 git clone <repo-url>
 cd photo-generation
 pip install -e ".[all]"
 ```
 
-### Optional dependencies
+This installs the `voxhelm` CLI command and all generation backends. The
+`pyproject.toml` defines the package, its dependencies, and the CLI entry point.
 
-The base install includes the CLI and server. Generation backends are optional:
+### Optional dependency groups
 
 ```bash
-pip install -e ".[svg]"        # Claude API for SVG generation
-pip install -e ".[bedrock]"    # AWS Bedrock backend
-pip install -e ".[openrouter]" # OpenRouter backend (also needed for photo mode)
+pip install -e .               # Core only (CLI + server framework)
+pip install -e ".[svg]"        # + Claude API (anthropic) for SVG generation
+pip install -e ".[bedrock]"    # + AWS Bedrock backend (boto3)
+pip install -e ".[openrouter]" # + OpenRouter backend (also needed for photo mode)
 pip install -e ".[all]"        # Everything
 ```
 
@@ -39,69 +42,181 @@ pip install -e ".[all]"        # Everything
 Create a `.env` file in the project root:
 
 ```bash
-# At least one of these for SVG mode:
-ANTHROPIC_API_KEY=sk-ant-...        # Anthropic direct
-# or configure AWS credentials for Bedrock
-# or:
-OPENROUTER_API_KEY=sk-or-...        # OpenRouter (also required for photo mode)
+# SVG mode — at least one of:
+ANTHROPIC_API_KEY=sk-ant-...          # Anthropic direct
+# or configure AWS credentials        # for Bedrock
+OPENROUTER_API_KEY=sk-or-...          # OpenRouter (also required for photo mode)
 
-# For audio (speak command):
+# Audio (speak command):
 DEEPGRAM_API_KEY=...
+
+# Optional:
+AWS_BEDROCK_REGION=ap-southeast-2     # Bedrock region (default)
 ```
 
-## Quick start
+SVG mode tries backends in order: **Bedrock → Anthropic direct → OpenRouter**.
 
-### Generate an avatar
+---
 
-```bash
-# SVG cartoon (default)
-voxhelm generate --preset young_woman
-voxhelm generate --style "robot with teal accents" --name bot
+## Workflow
 
-# Photorealistic PNG
-voxhelm generate --mode photo --style "woman in her 30s, dark hair, olive skin" --name photo_woman
+The recommended workflow is:
 
-# List available presets
-voxhelm generate --list-presets
+```
+1. generate-base    →  create reference frame (sil)
+2. validate         →  review in web viewer
+3. generate-visemes →  generate remaining 14 frames
+4. speak            →  create audio-driven demo
 ```
 
-### Split workflow (recommended for quality control)
+### Quick start
 
 ```bash
-# Step 1: Generate just the base frame
-voxhelm generate-base --mode photo --style "friendly man, 40s, short beard" --name bearded_man
+# Step 1: Generate a base frame
+voxhelm generate-base --preset young_woman
 
-# Step 2: Review the base in the gallery (opens automatically)
+# Step 2: Review (opens in browser automatically)
 
-# Step 3: Generate remaining 14 visemes from the approved base
-voxhelm generate-visemes --head bearded_man
-```
+# Step 3: Generate all visemes
+voxhelm generate-visemes --head young_woman
 
-### Audio-driven demo
-
-```bash
-# Create a playback demo with TTS audio
+# Step 4: Audio demo
 voxhelm speak --head young_woman --text "Hello, welcome aboard!"
-
-# Opens a self-contained HTML file with audio + viseme animation
 ```
 
-### Validate and preview
+Or do it all in one shot:
 
 ```bash
-voxhelm validate --head young_woman    # Web viewer for all viseme frames
-voxhelm serve                          # Full web studio on http://localhost:7432
+voxhelm generate --preset young_woman
+voxhelm generate --mode photo --style "woman in her 30s, dark hair" --name photo_woman
 ```
 
-## API server
+---
 
-The FastAPI server exposes the same functionality as the CLI:
+## CLI Reference
+
+### `voxhelm generate-base`
+
+Step 1: Generate the base (sil) frame for a character.
+
+```
+Options:
+  --mode TEXT         svg (cartoon) or photo (photorealistic)  [default: svg]
+  --preset TEXT       Bundled character preset
+  --style TEXT        Custom style description
+  --name TEXT         Output directory name
+  --list-presets      List available presets
+  --model TEXT        Claude model, svg mode only  [default: claude-opus-4-6]
+  --out TEXT          Root output directory  [default: outputs/heads]
+  -v, --verbose
+```
+
+```bash
+voxhelm generate-base --preset young_woman
+voxhelm generate-base --mode photo --style "friendly man, 40s, short beard" --name bearded_man
+voxhelm generate-base --list-presets
+```
+
+### `voxhelm generate-visemes`
+
+Step 2: Generate the remaining 14 viseme frames from an approved base.
+Reads mode/style from metadata saved by `generate-base`.
+
+```
+Options:
+  --head TEXT         Head name from generate-base  [required]
+  --out TEXT          Root output directory  [default: outputs/heads]
+  --skip-existing     Skip existing visemes  [default: true]
+  --no-blink          Skip blink frame, photo mode only
+  -v, --verbose
+```
+
+```bash
+voxhelm generate-visemes --head young_woman
+voxhelm generate-visemes --head photo_woman --no-blink
+```
+
+### `voxhelm generate`
+
+One-shot: generate all 15 viseme assets (base + visemes). For QA control, use
+`generate-base` + `generate-visemes` instead.
+
+```
+Options:
+  --mode TEXT         svg or photo  [default: svg]
+  --preset TEXT       Bundled character preset
+  --style TEXT        Custom style description
+  --name TEXT         Output directory name
+  --list-presets      List available presets
+  --model TEXT        Claude model, svg mode only  [default: claude-opus-4-6]
+  --out TEXT          Root output directory  [default: outputs/heads]
+  --skip-existing     Skip existing assets
+  --no-blink          Skip blink frame, photo mode only
+  -v, --verbose
+```
+
+```bash
+voxhelm generate --preset young_woman
+voxhelm generate --mode photo --style "woman in her 30s, dark hair" --name photo_woman
+```
+
+### `voxhelm speak`
+
+Generate TTS audio with viseme timeline and write a self-contained playback HTML.
+Auto-detects SVG or PNG assets.
+
+```
+Options:
+  --head TEXT         Head name  [required]
+  --text TEXT         Text to speak  [required]
+  --out TEXT          Output HTML path  [default: outputs/speak_demo.html]
+  -v, --verbose
+```
+
+```bash
+voxhelm speak --head young_woman --text "Hello, welcome aboard!"
+voxhelm speak --head photo_woman --text "Nice to meet you" --out demo.html
+```
+
+### `voxhelm validate`
+
+Launch a web viewer to inspect generated assets. Shows all viseme frames in a
+gallery with preview and blink animation.
+
+```
+Options:
+  --head TEXT         Head name  [required]
+  --port INTEGER      Port (0=auto)  [default: 0]
+  -v, --verbose
+```
+
+```bash
+voxhelm validate --head young_woman
+```
+
+### `voxhelm serve`
+
+Start the Voxhelm web studio (FastAPI server).
+
+```
+Options:
+  --port INTEGER      Server port  [default: 7432]
+  --host TEXT         Server host  [default: 127.0.0.1]
+  -v, --verbose
+```
+
+```bash
+voxhelm serve
+voxhelm serve --port 8080 --host 0.0.0.0
+```
+
+---
+
+## API Server
 
 ```bash
 voxhelm serve --port 7432
 ```
-
-### Endpoints
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -109,7 +224,7 @@ voxhelm serve --port 7432
 | `GET` | `/api/presets` | List character presets |
 | `POST` | `/api/generate-base` | Generate base frame |
 | `POST` | `/api/generate-visemes` | Generate visemes from approved base |
-| `GET` | `/api/head/{name}/assets` | Get all viseme assets for a head |
+| `GET` | `/api/head/{name}/assets` | Get all viseme assets |
 | `POST` | `/api/speak` | TTS + viseme timeline |
 
 ### Python library
@@ -127,11 +242,25 @@ load_env()
 # SVG generation
 base = generate_base(style="young woman, cartoon", name="test")
 gallery = generate_visemes(style="young woman, cartoon", name="test")
-svgs = load_svgs(Path("outputs/heads/test"))
 
 # Photo generation
 photo_base(style="woman, 30s, dark hair", name="photo_test")
 ```
+
+---
+
+## Character presets
+
+| Key | Description |
+|-----|-------------|
+| `young_man` | Young man, mid-20s, short dark hair, light skin |
+| `middle_man` | Middle-aged man, 40s, salt-and-pepper stubble |
+| `older_man` | Elderly man, 70s, white hair, kind eyes |
+| `young_woman` | Young woman, mid-20s, long auburn hair, freckled skin |
+| `middle_woman` | Middle-aged woman, 40s, dark hair with grey streaks |
+| `older_woman` | Elderly woman, 70s, silver bun, rosy cheeks |
+
+---
 
 ## Flutter package
 
@@ -149,50 +278,48 @@ VoxhelmAvatar(visemeSet: visemeSet, controller: ctrl, blinkController: blink, si
 
 See `voxhelm_avatar/README.md` for the full API reference.
 
+---
+
 ## Legacy scripts
 
-Standalone scripts from earlier development are in `scripts/`. These still work
-but the voxhelm CLI is the recommended interface.
+Standalone scripts from earlier development are in `scripts/legacy/`. The
+`voxhelm` CLI is the recommended interface.
 
-### Requirements for legacy scripts
+For scripts that still run independently (`scripts/`):
 
 ```bash
-# Lipsync pipeline (Whisper + NLTK)
-pip install -r requirements-scripts.txt
-python scripts/lipsync_pipeline.py
-
-# MediaPipe landmark extraction (needs Python <=3.12)
-uv venv --python 3.12 .venv-landmarks
-uv pip install --python .venv-landmarks/bin/python -r requirements-landmarks.txt
-.venv-landmarks/bin/python scripts/extract_landmarks.py
+pip install -r requirements-scripts.txt      # Whisper + NLTK
+pip install -r requirements-landmarks.txt    # MediaPipe (Python <=3.12 only)
 ```
+
+---
 
 ## Project structure
 
 ```
-voxhelm/                    Python package — CLI + core library + server
-  cli/main.py               Typer CLI
+voxhelm/                    Python package
+  cli/main.py               Typer CLI (generate-base, generate-visemes, speak, etc.)
   core/
-    generator.py             SVG cartoon generation (Claude)
-    photo_generator.py       Photorealistic PNG generation (Gemini Flash)
-    api_client.py            LLM client factory (Bedrock/Anthropic/OpenRouter)
-    audio.py                 Deepgram TTS/STT
+    generator.py             SVG cartoon generation (Claude API)
+    photo_generator.py       Photorealistic PNG generation (Gemini Flash Image)
+    api_client.py            LLM client factory (Bedrock / Anthropic / OpenRouter)
+    audio.py                 Deepgram TTS / STT
     timeline.py              Phoneme → viseme timeline
     visemes.py               15 OVR viseme definitions + mappings
     presets.py               Bundled character presets
   server/app.py             FastAPI server
-  viewer/viewer.html        Validation web viewer
+  viewer/viewer.html        Validation web viewer template
 
 voxhelm_avatar/             Flutter package — drop-in avatar widget
-
-scripts/                    Legacy standalone scripts
-docs/                       Research notes and experiment history
-outputs/                    Generated assets (not committed)
+scripts/                    Standalone scripts (flashimage, landmarks)
+scripts/legacy/             Superseded scripts from earlier experiments
+webapp/                     Web studio frontend (served by voxhelm serve)
+docs/                       Documentation and experiment history
 ```
 
 ## Documentation
 
+- `docs/cli_usage.md` — Full CLI reference with examples
 - `docs/experiments.md` — Research history and approaches tried
 - `docs/flutter_integration.md` — Flutter + voice-gateway integration guide
-- `docs/cli_usage.md` — Full CLI reference
 - `docs/talking-head-options.md` — Talking-head model research notes
