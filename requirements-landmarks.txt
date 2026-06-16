@@ -1,0 +1,12 @@
+# Requirements for MediaPipe landmark extraction
+# Needs Python <=3.12 (MediaPipe constraint)
+#
+# Setup:
+#   uv venv --python 3.12 .venv-landmarks
+#   uv pip install --python .venv-landmarks/bin/python -r requirements-landmarks.txt
+#   .venv-landmarks/bin/python scripts/extract_landmarks.py
+
+mediapipe>=0.10
+opencv-python-headless>=4.8
+numpy>=1.24
+scipy>=1.11

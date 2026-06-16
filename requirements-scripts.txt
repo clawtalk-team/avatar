@@ -1,0 +1,13 @@
+# Requirements for legacy scripts in scripts/
+# Install: pip install -r requirements-scripts.txt
+
+# lipsync_pipeline.py
+requests>=2.31
+nltk>=3.8
+openai-whisper>=20231117
+
+# viseme_demo.py, generate_head.py
+anthropic>=0.40
+
+# flashimage_generate.py — uses urllib only, but needs:
+# OPENROUTER_API_KEY in .env

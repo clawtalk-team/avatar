@@ -111,62 +111,96 @@ def write_gallery(out_dir: Path, visemes: list[str], style: str, name: str) -> P
     return gallery
 
 
-def generate(
+def generate_base(
+    style: str,
+    name: str,
+    model: str = "claude-opus-4-6",
+    out_root: Path | str = "outputs/heads",
+    on_progress: Callable[[str, int, int, str], None] | None = None,
+    client: LLMClient | None = None,
+) -> Path:
+    """Generate the base (sil) SVG frame for a character.
+
+    This is step 1 of the workflow: generate base → review → generate visemes.
+
+    Returns:
+        Path to the generated sil.svg file.
+    """
+    out_dir = Path(out_root) / name
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_file = out_dir / "sil.svg"
+
+    log.info("Generating base SVG for '%s' → %s", name, out_dir)
+    if on_progress:
+        on_progress("sil", 0, 1, "generating")
+
+    _client = client or get_llm_client(model)
+    prompt = build_prompt(style, "sil", None)
+    resp = _client.generate(SYSTEM_PROMPT, prompt)
+    svg_text = _clean_svg(resp.text)
+
+    if not svg_text.startswith("<svg"):
+        log.warning("Unexpected response for sil: %s", svg_text[:80])
+
+    out_file.write_text(svg_text)
+    log.info("Base SVG saved (%d chars, %d tok)", len(svg_text), resp.output_tokens)
+
+    if on_progress:
+        on_progress("sil", 0, 1, "ok")
+
+    # Write a single-item gallery for review
+    write_gallery(out_dir, ["sil"], style, name)
+    return out_file
+
+
+def generate_visemes(
     style: str,
     name: str,
     visemes: list[str] | None = None,
     model: str = "claude-opus-4-6",
     out_root: Path | str = "outputs/heads",
-    skip_existing: bool = False,
+    skip_existing: bool = True,
     on_progress: Callable[[str, int, int, str], None] | None = None,
     client: LLMClient | None = None,
 ) -> Path:
-    """Generate a full set of viseme SVGs for a character.
+    """Generate the remaining viseme SVGs using an existing base (sil) as reference.
 
-    Args:
-        style: Character style description.
-        name: Output directory name.
-        visemes: List of viseme keys to generate (default: all 15).
-        model: Claude model name.
-        out_root: Root output directory.
-        skip_existing: Skip visemes that already have SVG files.
-        on_progress: Callback(viseme, index, total, status) for progress reporting.
-        client: Pre-configured LLM client (created automatically if None).
+    This is step 2 of the workflow: generate base → review → generate visemes.
+    Requires sil.svg to already exist in the output directory.
 
     Returns:
         Path to the generated gallery HTML file.
     """
     viseme_list = visemes or ALL_VISEMES
     out_dir = Path(out_root) / name
-    out_dir.mkdir(parents=True, exist_ok=True)
+    sil_path = out_dir / "sil.svg"
 
-    # Defer client creation until we actually need to generate something
+    if not sil_path.exists():
+        raise FileNotFoundError(
+            f"Base SVG not found at {sil_path}. "
+            "Run 'voxhelm generate-base' first."
+        )
+
+    first_svg = sil_path.read_text()
     _client = client
+    remaining = [v for v in viseme_list if v != "sil"]
 
-    log.info("Generating %d visemes for '%s' → %s", len(viseme_list), name, out_dir)
+    log.info("Generating %d visemes for '%s' → %s", len(remaining), name, out_dir)
 
-    first_svg = None
-    if skip_existing and (out_dir / "sil.svg").exists():
-        first_svg = (out_dir / "sil.svg").read_text()
-
-    for i, viseme in enumerate(viseme_list):
+    for i, viseme in enumerate(remaining):
         if viseme not in VISEMES:
             log.warning("Unknown viseme '%s' — skipping", viseme)
             continue
 
         out_file = out_dir / f"{viseme}.svg"
-        _log = log.debug if on_progress else log.info
         if skip_existing and out_file.exists():
-            _log("[%d/%d] %s SKIP (exists)", i + 1, len(viseme_list), viseme)
+            log.debug("[%d/%d] %s SKIP (exists)", i + 1, len(remaining), viseme)
             if on_progress:
-                on_progress(viseme, i, len(viseme_list), "skip")
-            if first_svg is None:
-                first_svg = out_file.read_text()
+                on_progress(viseme, i, len(remaining), "skip")
             continue
 
-        _log("[%d/%d] %s generating...", i + 1, len(viseme_list), viseme)
         if on_progress:
-            on_progress(viseme, i, len(viseme_list), "generating")
+            on_progress(viseme, i, len(remaining), "generating")
 
         prompt = build_prompt(style, viseme, first_svg)
 
@@ -180,22 +214,49 @@ def generate(
                 log.warning("Unexpected response for %s: %s", viseme, svg_text[:80])
 
             out_file.write_text(svg_text)
-            _log("[%d/%d] %s OK (%d chars, %d tok)",
-                 i + 1, len(viseme_list), viseme, len(svg_text), resp.output_tokens)
+            log.info("[%d/%d] %s OK (%d chars, %d tok)",
+                     i + 1, len(remaining), viseme, len(svg_text), resp.output_tokens)
 
             if on_progress:
-                on_progress(viseme, i, len(viseme_list), "ok")
-
-            if first_svg is None:
-                first_svg = svg_text
+                on_progress(viseme, i, len(remaining), "ok")
 
         except Exception as e:
-            log.error("[%d/%d] %s FAILED: %s", i + 1, len(viseme_list), viseme, e)
+            log.error("[%d/%d] %s FAILED: %s", i + 1, len(remaining), viseme, e)
             if on_progress:
-                on_progress(viseme, i, len(viseme_list), f"error: {e}")
+                on_progress(viseme, i, len(remaining), f"error: {e}")
 
     gallery = write_gallery(out_dir, viseme_list, style, name)
     return gallery
+
+
+def generate(
+    style: str,
+    name: str,
+    visemes: list[str] | None = None,
+    model: str = "claude-opus-4-6",
+    out_root: Path | str = "outputs/heads",
+    skip_existing: bool = False,
+    on_progress: Callable[[str, int, int, str], None] | None = None,
+    client: LLMClient | None = None,
+) -> Path:
+    """Generate a full set of viseme SVGs in one shot (base + visemes).
+
+    For the split workflow, use generate_base() then generate_visemes() instead.
+    """
+    out_dir = Path(out_root) / name
+    sil_path = out_dir / "sil.svg"
+
+    if not (skip_existing and sil_path.exists()):
+        generate_base(
+            style=style, name=name, model=model, out_root=out_root,
+            on_progress=on_progress, client=client,
+        )
+
+    return generate_visemes(
+        style=style, name=name, visemes=visemes, model=model,
+        out_root=out_root, skip_existing=skip_existing,
+        on_progress=on_progress, client=client,
+    )
 
 
 def load_svgs(svg_dir: Path) -> dict[str, str]:

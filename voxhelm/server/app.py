@@ -20,7 +20,8 @@ def create_app():
 
     from voxhelm.core.presets import PRESETS
     from voxhelm.core.visemes import ALL_VISEMES
-    from voxhelm.core import generator as gen
+    from voxhelm.core import generator as svg_gen
+    from voxhelm.core import photo_generator as photo_gen
     from voxhelm.core.audio import deepgram_tts, deepgram_stt_words
     from voxhelm.core.timeline import words_to_timeline
 
@@ -37,11 +38,15 @@ def create_app():
     AUDIO_CACHE = REPO_ROOT / "outputs" / "webapp_cache"
     AUDIO_CACHE.mkdir(parents=True, exist_ok=True)
 
-    class GenerateRequest(BaseModel):
+    class GenerateBaseRequest(BaseModel):
+        mode: str = "svg"
         style: str
         name: Optional[str] = None
         preset: Optional[str] = None
         model: str = "claude-opus-4-6"
+
+    class GenerateVisemesRequest(BaseModel):
+        head: str
 
     class SpeakRequest(BaseModel):
         text: str
@@ -58,12 +63,25 @@ def create_app():
         for d in sorted(HEADS_DIR.iterdir()):
             if d.is_dir():
                 svgs = list(d.glob("*.svg"))
-                sil = d / "sil.svg"
+                pngs = [f for f in d.glob("*.png") if f.name != "base.png"]
+                mode = "svg" if svgs else "photo" if pngs else "unknown"
+                asset_count = len(svgs) if mode == "svg" else len(pngs)
+
+                # Read metadata if available
+                meta_path = d / ".voxhelm.json"
+                meta = {}
+                if meta_path.exists():
+                    try:
+                        meta = json.loads(meta_path.read_text())
+                    except Exception:
+                        pass
+
                 heads.append({
                     "name": d.name,
-                    "visemes": len(svgs),
-                    "complete": len(svgs) >= 15,
-                    "sil_svg": sil.read_text() if sil.exists() else None,
+                    "mode": mode,
+                    "visemes": asset_count,
+                    "complete": asset_count >= 15,
+                    "style": meta.get("style", ""),
                 })
         return heads
 
@@ -71,8 +89,8 @@ def create_app():
     async def list_presets():
         return [{"key": k, "description": v} for k, v in PRESETS.items()]
 
-    @app.post("/api/generate")
-    async def generate_head(req: GenerateRequest):
+    @app.post("/api/generate-base")
+    async def generate_base(req: GenerateBaseRequest):
         if req.preset and req.preset in PRESETS:
             style = PRESETS[req.preset]
             name = req.name or req.preset
@@ -82,29 +100,67 @@ def create_app():
         else:
             raise HTTPException(400, "Provide style or preset")
 
+        # Save metadata
+        head_dir = HEADS_DIR / name
+        head_dir.mkdir(parents=True, exist_ok=True)
+        meta = {"mode": req.mode, "style": style, "name": name, "model": req.model}
+        (head_dir / ".voxhelm.json").write_text(json.dumps(meta, indent=2))
+
         try:
-            gallery = gen.generate(
-                style=style,
-                name=name,
-                out_root=HEADS_DIR,
-                model=req.model,
-                skip_existing=True,
-            )
-            return {"name": name, "gallery": f"/heads/{name}/gallery.html", "ok": True}
+            if req.mode == "svg":
+                result = svg_gen.generate_base(
+                    style=style, name=name, model=req.model, out_root=HEADS_DIR,
+                )
+            else:
+                result = photo_gen.generate_base(
+                    style=style, name=name, out_root=HEADS_DIR,
+                )
+            return {"name": name, "base": str(result), "ok": True}
         except Exception as e:
             raise HTTPException(500, str(e))
 
-    @app.get("/api/head/{name}/svgs")
-    async def get_head_svgs(name: str):
+    @app.post("/api/generate-visemes")
+    async def generate_visemes(req: GenerateVisemesRequest):
+        head_dir = HEADS_DIR / req.head
+        meta_path = head_dir / ".voxhelm.json"
+        if not meta_path.exists():
+            raise HTTPException(404, "Head not found or missing metadata")
+
+        meta = json.loads(meta_path.read_text())
+
+        try:
+            if meta["mode"] == "svg":
+                gallery = svg_gen.generate_visemes(
+                    style=meta["style"], name=req.head,
+                    model=meta.get("model", "claude-opus-4-6"),
+                    out_root=HEADS_DIR,
+                )
+            else:
+                gallery = photo_gen.generate_visemes(
+                    style=meta["style"], name=req.head,
+                    out_root=HEADS_DIR,
+                )
+            return {"name": req.head, "gallery": f"/heads/{req.head}/gallery.html", "ok": True}
+        except Exception as e:
+            raise HTTPException(500, str(e))
+
+    @app.get("/api/head/{name}/assets")
+    async def get_head_assets(name: str):
         head_dir = HEADS_DIR / name
         if not head_dir.exists():
             raise HTTPException(404, "Head not found")
-        svgs = {}
+
+        # Try SVGs first, then PNGs
+        assets = {}
         for v in ALL_VISEMES:
-            f = head_dir / f"{v}.svg"
-            if f.exists():
-                svgs[v] = f.read_text()
-        return svgs
+            svg_f = head_dir / f"{v}.svg"
+            png_f = head_dir / f"{v}.png"
+            if svg_f.exists():
+                assets[v] = {"type": "svg", "data": svg_f.read_text()}
+            elif png_f.exists():
+                b64 = base64.b64encode(png_f.read_bytes()).decode()
+                assets[v] = {"type": "png", "data": f"data:image/png;base64,{b64}"}
+        return assets
 
     @app.post("/api/speak")
     async def speak(req: SpeakRequest):
@@ -141,7 +197,12 @@ def create_app():
         f = HEADS_DIR / name / file
         if not f.exists():
             raise HTTPException(404)
-        media = "image/svg+xml" if file.endswith(".svg") else "text/html"
+        if file.endswith(".svg"):
+            media = "image/svg+xml"
+        elif file.endswith(".png"):
+            media = "image/png"
+        else:
+            media = "text/html"
         return FileResponse(f, media_type=media)
 
     return app
