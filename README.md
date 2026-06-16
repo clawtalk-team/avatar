@@ -344,7 +344,7 @@ python scripts/generate_heads_batch.py --skip-existing
 `scripts/viseme_demo.py` generates a self-contained `outputs/viseme_demo.html` with:
 
 - **Deepgram TTS** (`aura-2-thalia-en`) for speech synthesis
-- **Deepgram STT** (`nova-3` with `timestamps=true`) for word-level timing
+- **Deepgram STT** (`nova-3` with `words=true`) for word-level timing
 - **CMUdict** phoneme lookup + ARPAbet → viseme mapping within each word's time window
 - Speed controls (0.25×, 0.5×, 1×)
 - Idle eye-blink overlay (two SVG ellipses animating `ry` 0→28→0, 4–9s intervals)
@@ -645,7 +645,7 @@ pattern; adapt the remote script to use `model.generate_t2svg()` instead.
 
 ```
 voxhelm/                    Python package — CLI + core library + server
-  core/                     Core functions (generator, audio, timeline, visemes, presets)
+  core/                     Core functions (generator, audio, timeline, visemes, presets, api_client)
   cli/main.py               Typer CLI (generate, speak, validate, serve)
   server/app.py             FastAPI server (same API as webapp/server.py)
   viewer/viewer.html        Test harness HTML for validate command

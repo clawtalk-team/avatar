@@ -133,7 +133,7 @@ def deepgram_tts(text: str, api_key: str) -> bytes:
 
 def deepgram_stt_words(audio: bytes, api_key: str) -> list[dict]:
     """Run STT on MP3 bytes, return word list with start/end timestamps."""
-    url = "https://api.deepgram.com/v1/listen?model=nova-3&punctuate=false&timestamps=true"
+    url = "https://api.deepgram.com/v1/listen?model=nova-3&punctuate=false&words=true"
     req = urllib.request.Request(url, data=audio, method="POST")
     req.add_header("Authorization", f"Token {api_key}")
     req.add_header("Content-Type", "audio/mpeg")
