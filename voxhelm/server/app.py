@@ -19,7 +19,7 @@ def create_app():
     from pydantic import BaseModel
 
     from voxhelm.core.presets import PRESETS
-    from voxhelm.core.visemes import VISEMES
+    from voxhelm.core.visemes import ALL_VISEMES
     from voxhelm.core import generator as gen
     from voxhelm.core.audio import deepgram_tts, deepgram_stt_words
     from voxhelm.core.timeline import words_to_timeline
@@ -100,7 +100,7 @@ def create_app():
         if not head_dir.exists():
             raise HTTPException(404, "Head not found")
         svgs = {}
-        for v in VISEMES:
+        for v in ALL_VISEMES:
             f = head_dir / f"{v}.svg"
             if f.exists():
                 svgs[v] = f.read_text()

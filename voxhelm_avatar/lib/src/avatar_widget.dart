@@ -91,7 +91,7 @@ class _VoxhelmAvatarState extends State<VoxhelmAvatar> {
   @override
   void didUpdateWidget(VoxhelmAvatar old) {
     super.didUpdateWidget(old);
-    if (old.visemeSet != widget.visemeSet) {
+    if (old.visemeSet != widget.visemeSet || old.size != widget.size) {
       _svgCache.clear();
       _buildSvgCache();
     }

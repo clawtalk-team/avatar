@@ -51,7 +51,7 @@ def deepgram_stt_words(audio: bytes, api_key: str | None = None) -> list[dict]:
     if not key:
         raise RuntimeError("DEEPGRAM_API_KEY not set")
 
-    url = "https://api.deepgram.com/v1/listen?model=nova-3&punctuate=false&timestamps=true"
+    url = "https://api.deepgram.com/v1/listen?model=nova-3&punctuate=false&words=true"
     req = urllib.request.Request(url, data=audio, method="POST")
     req.add_header("Authorization", f"Token {key}")
     req.add_header("Content-Type", "audio/mpeg")

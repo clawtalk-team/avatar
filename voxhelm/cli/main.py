@@ -7,7 +7,6 @@ import json
 import logging
 import re
 import subprocess
-import sys
 from pathlib import Path
 
 import typer

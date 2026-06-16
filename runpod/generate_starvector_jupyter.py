@@ -13,7 +13,7 @@ Usage:
 
 Environment:
     RUNPOD_API_KEY   – used as Jupyter token (or leave empty if unauthenticated)
-    RUNPOD_POD_ID    – pod ID (defaults to REDACTED_POD_ID)
+    RUNPOD_POD_ID    – pod ID (required)
     HF_TOKEN         – HuggingFace token for bigcode/starcoderbase-1b
 
 Outputs:
@@ -311,7 +311,9 @@ async def execute_code(ws_base: str, kernel_id: str, code: str, timeout: int = 6
 async def main():
     load_dotenv()
 
-    pod_id = os.environ.get("RUNPOD_POD_ID", "").strip() or "REDACTED_POD_ID"
+    pod_id = os.environ.get("RUNPOD_POD_ID", "").strip()
+    if not pod_id:
+        sys.exit("RUNPOD_POD_ID not set")
     hf_token = os.environ.get("HF_TOKEN", "").strip()
     if not hf_token:
         hf_token_file = Path.home() / ".cache" / "huggingface" / "token"
