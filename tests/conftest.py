@@ -27,8 +27,13 @@ def tmp_repo_root(tmp_path):
     (tmp_path / "outputs" / "heads").mkdir(parents=True)
     (tmp_path / "outputs" / "webapp_cache").mkdir(parents=True)
     (tmp_path / "webapp").mkdir(parents=True)
-    # Create a minimal index.html so the server can serve /
-    (tmp_path / "webapp" / "index.html").write_text("<html><body>Voxhelm</body></html>")
+    # Copy the real webapp so smoke tests can verify its content
+    import voxhelm
+    real_webapp = Path(voxhelm.__file__).parent.parent / "webapp" / "index.html"
+    if real_webapp.exists():
+        (tmp_path / "webapp" / "index.html").write_text(real_webapp.read_text())
+    else:
+        (tmp_path / "webapp" / "index.html").write_text("<html><body>Voxhelm Studio</body></html>")
     return tmp_path
 
 

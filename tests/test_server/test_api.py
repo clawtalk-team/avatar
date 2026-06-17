@@ -259,6 +259,53 @@ def test_delete_head_not_found(api_client):
     assert resp.status_code == 404
 
 
+# ── SSE stream ─────────────────────────────────────────────────────────────
+
+def test_job_stream(api_client):
+    """Test SSE stream delivers progress events and a done event."""
+    api_client.post("/api/generate-base", json={
+        "mode": "svg", "preset": "young_woman",
+    })
+    resp = api_client.post("/api/generate-visemes", json={"head": "young_woman"})
+    job_id = resp.json()["job_id"]
+
+    # Wait for the job to complete first (so events are ready)
+    _wait_for_job(api_client, job_id)
+
+    # Now read the SSE stream — all events should be buffered
+    with api_client.stream("GET", f"/api/jobs/{job_id}/stream") as stream:
+        lines = []
+        for line in stream.iter_lines():
+            lines.append(line)
+            # Stop after we see the done event
+            if line.startswith("event: done"):
+                break
+
+    # Should have data lines and a done event
+    data_lines = [l for l in lines if l.startswith("data:")]
+    assert len(data_lines) >= 2  # at least some progress + final done
+    done_lines = [l for l in lines if l.startswith("event: done")]
+    assert len(done_lines) == 1
+
+
+# ── Webapp smoke test ──────────────────────────────────────────────────────
+
+def test_webapp_has_key_elements(api_client):
+    """Verify the webapp HTML contains expected UI elements."""
+    resp = api_client.get("/")
+    assert resp.status_code == 200
+    html = resp.text
+    assert "Voxhelm Studio" in html
+    assert "generate-base" in html or "doGenerateBase" in html
+    assert "preset-grid" in html
+    assert "mode-toggle" in html or "mode-opt" in html
+    assert "/api/presets" in html
+    assert "/api/generate-base" in html
+    assert "/api/generate-visemes" in html
+    assert "/api/speak" in html
+    assert "EventSource" in html  # SSE progress streaming
+
+
 # ── Head list after generation ─────────────────────────────────────────────
 
 def test_list_heads_after_generate(api_client):
