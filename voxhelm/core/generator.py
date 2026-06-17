@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Callable
 
@@ -182,48 +183,57 @@ def generate_visemes(
         )
 
     first_svg = sil_path.read_text()
-    _client = client
+    _client = client or get_llm_client(model)
     remaining = [v for v in viseme_list if v != "sil"]
 
-    log.info("Generating %d visemes for '%s' → %s", len(remaining), name, out_dir)
-
-    for i, viseme in enumerate(remaining):
+    # Build work items
+    work: list[tuple[str, Path, str]] = []
+    for viseme in remaining:
         if viseme not in VISEMES:
-            log.warning("Unknown viseme '%s' — skipping", viseme)
             continue
-
         out_file = out_dir / f"{viseme}.svg"
         if skip_existing and out_file.exists():
-            log.debug("[%d/%d] %s SKIP (exists)", i + 1, len(remaining), viseme)
             if on_progress:
-                on_progress(viseme, i, len(remaining), "skip")
+                on_progress(viseme, 0, len(remaining), "skip")
             continue
+        work.append((viseme, out_file, build_prompt(style, viseme, first_svg)))
 
-        if on_progress:
-            on_progress(viseme, i, len(remaining), "generating")
+    total = len(work)
+    if total == 0:
+        log.info("All visemes already exist for '%s', nothing to generate", name)
+        return write_gallery(out_dir, viseme_list, style, name)
 
-        prompt = build_prompt(style, viseme, first_svg)
+    log.info("Generating %d visemes for '%s' (parallel) → %s", total, name, out_dir)
 
+    max_workers = min(total, 4)  # Bedrock/Claude may have lower rate limits than Gemini
+    completed = 0
+
+    def _do_one(item: tuple[str, Path, str]) -> tuple[str, Path, str | None, int, str | None]:
+        label, out_path, prompt = item
         try:
-            if _client is None:
-                _client = get_llm_client(model)
             resp = _client.generate(SYSTEM_PROMPT, prompt)
             svg_text = _clean_svg(resp.text)
-
             if not svg_text.startswith("<svg"):
-                log.warning("Unexpected response for %s: %s", viseme, svg_text[:80])
-
-            out_file.write_text(svg_text)
-            log.info("[%d/%d] %s OK (%d chars, %d tok)",
-                     i + 1, len(remaining), viseme, len(svg_text), resp.output_tokens)
-
-            if on_progress:
-                on_progress(viseme, i, len(remaining), "ok")
-
+                log.warning("Unexpected response for %s: %s", label, svg_text[:80])
+            return (label, out_path, svg_text, resp.output_tokens, None)
         except Exception as e:
-            log.error("[%d/%d] %s FAILED: %s", i + 1, len(remaining), viseme, e)
-            if on_progress:
-                on_progress(viseme, i, len(remaining), f"error: {e}")
+            return (label, out_path, None, 0, str(e))
+
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        futures = {pool.submit(_do_one, item): item for item in work}
+        for future in as_completed(futures):
+            label, out_path, svg_text, tokens, error = future.result()
+            completed += 1
+            if error:
+                log.error("[%d/%d] %s FAILED: %s", completed, total, label, error)
+                if on_progress:
+                    on_progress(label, completed - 1, total, f"error: {error}")
+            else:
+                out_path.write_text(svg_text)
+                log.info("[%d/%d] %s OK (%d chars, %d tok)",
+                         completed, total, label, len(svg_text), tokens)
+                if on_progress:
+                    on_progress(label, completed - 1, total, "ok")
 
     gallery = write_gallery(out_dir, viseme_list, style, name)
     return gallery
