@@ -18,6 +18,7 @@ import os
 import time
 import urllib.request
 import urllib.error
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Callable
 
@@ -279,9 +280,6 @@ def generate_visemes(
     base_png = base_path.read_bytes()
     remaining = [v for v in viseme_list if v != "sil"]
     extras_to_gen = list(EXTRA_EDITS.keys()) if include_blink else []
-    total = len(remaining) + len(extras_to_gen)
-
-    log.info("Generating %d photo visemes for '%s' → %s", total, name, out_dir)
 
     # Load or create manifest
     man_path = out_dir / "manifest.json"
@@ -290,55 +288,64 @@ def generate_visemes(
     else:
         manifest = {"base": "base.png", "visemes": {"sil": "sil.png"}}
 
-    for i, viseme in enumerate(remaining):
-        if viseme not in VISEME_MOUTHS:
-            log.warning("Unknown viseme '%s' — skipping", viseme)
-            continue
+    # Build work items: (label, out_path, prompt) for everything that needs generating
+    work: list[tuple[str, Path, str]] = []
 
+    for viseme in remaining:
+        if viseme not in VISEME_MOUTHS:
+            continue
         out_file = out_dir / f"{viseme}.png"
         if skip_existing and out_file.exists():
-            log.debug("[%d/%d] %s SKIP (exists)", i + 1, total, viseme)
-            if on_progress:
-                on_progress(viseme, i, total, "skip")
             manifest["visemes"][viseme] = f"{viseme}.png"
             continue
+        work.append((viseme, out_file, _build_edit_prompt(style, viseme)))
 
-        if on_progress:
-            on_progress(viseme, i, total, "generating")
-
-        try:
-            prompt = _build_edit_prompt(style, viseme)
-            png = _generate_image(prompt, api_key, input_png=base_png)
-            out_file.write_bytes(png)
-            manifest["visemes"][viseme] = f"{viseme}.png"
-            log.info("[%d/%d] %s OK (%d bytes)", i + 1, total, viseme, len(png))
-            if on_progress:
-                on_progress(viseme, i, total, "ok")
-        except Exception as e:
-            log.error("[%d/%d] %s FAILED: %s", i + 1, total, viseme, e)
-            if on_progress:
-                on_progress(viseme, i, total, f"error: {e}")
-
-    # Extra animation frames (blink, brows_up, etc.)
-    for ei, extra_name in enumerate(extras_to_gen):
+    for extra_name in extras_to_gen:
         extra_path = out_dir / f"{extra_name}.png"
         if skip_existing and extra_path.exists():
             continue
-        idx = len(remaining) + ei
-        if on_progress:
-            on_progress(extra_name, idx, total, "generating")
+        region, desc = EXTRA_EDITS[extra_name]
+        work.append((extra_name, extra_path, _build_extra_edit_prompt(style, region, desc)))
+
+    total = len(work)
+    if total == 0:
+        log.info("All visemes already exist for '%s', nothing to generate", name)
+        return write_gallery(out_dir, viseme_list, style, name)
+
+    log.info("Generating %d frames for '%s' (parallel) → %s", total, name, out_dir)
+
+    if on_progress:
+        for i, (label, _, _) in enumerate(work):
+            on_progress(label, i, total, "queued")
+
+    # Generate all frames in parallel — each edits the same base independently
+    max_workers = min(total, 6)  # cap concurrency to avoid rate limits
+    completed = 0
+
+    def _do_one(item: tuple[str, Path, str]) -> tuple[str, Path, bytes | None, str | None]:
+        label, out_path, prompt = item
         try:
-            region, desc = EXTRA_EDITS[extra_name]
-            prompt = _build_extra_edit_prompt(style, region, desc)
             png = _generate_image(prompt, api_key, input_png=base_png)
-            extra_path.write_bytes(png)
-            log.info("%s frame saved (%d bytes)", extra_name, len(png))
-            if on_progress:
-                on_progress(extra_name, idx, total, "ok")
+            return (label, out_path, png, None)
         except Exception as e:
-            log.error("%s FAILED: %s", extra_name, e)
-            if on_progress:
-                on_progress(extra_name, idx, total, f"error: {e}")
+            return (label, out_path, None, str(e))
+
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        futures = {pool.submit(_do_one, item): item for item in work}
+        for future in as_completed(futures):
+            label, out_path, png, error = future.result()
+            completed += 1
+            if error:
+                log.error("[%d/%d] %s FAILED: %s", completed, total, label, error)
+                if on_progress:
+                    on_progress(label, completed - 1, total, f"error: {error}")
+            else:
+                out_path.write_bytes(png)
+                if label in VISEME_MOUTHS:
+                    manifest["visemes"][label] = f"{label}.png"
+                log.info("[%d/%d] %s OK (%d bytes)", completed, total, label, len(png))
+                if on_progress:
+                    on_progress(label, completed - 1, total, "ok")
 
     # Write manifest
     man_path.write_text(json.dumps(manifest, indent=2))
