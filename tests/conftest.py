@@ -47,10 +47,10 @@ def mock_llm_client():
 
 @pytest.fixture
 def mock_photo_generate(monkeypatch):
-    """Patch _generate_image to return a 1x1 PNG."""
+    """Patch _generate_image to return a 1x1 PNG with mock usage."""
     monkeypatch.setattr(
         "voxhelm.core.photo_generator._generate_image",
-        lambda *a, **kw: MINIMAL_PNG,
+        lambda *a, **kw: (MINIMAL_PNG, {"prompt_tokens": 100, "completion_tokens": 50, "total_cost": 0.01}),
     )
 
 

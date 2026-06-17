@@ -3,9 +3,11 @@
 API mirrors the CLI commands:
   GET  /api/presets              — list character presets
   GET  /api/heads                — list generated heads
-  POST /api/generate-base        — step 1: generate base frame
-  POST /api/generate-visemes     — step 2: generate remaining visemes
-  POST /api/generate             — one-shot: base + visemes
+  POST /api/generate-base        — step 1: generate base frame (sync — single API call)
+  POST /api/generate-visemes     — step 2: generate visemes (async — returns job ID)
+  POST /api/generate             — one-shot: base + visemes (async — returns job ID)
+  GET  /api/jobs/{id}/stream     — SSE stream of generation progress
+  GET  /api/jobs/{id}            — poll job status
   GET  /api/head/{name}/assets   — get all viseme assets
   GET  /api/head/{name}/validate — get validation gallery HTML
   POST /api/speak                — TTS + viseme timeline
@@ -15,6 +17,9 @@ import base64
 import json
 import os
 import re
+import threading
+import time
+import uuid
 from pathlib import Path
 from typing import Optional
 
@@ -23,7 +28,7 @@ from voxhelm import REPO_ROOT
 
 def create_app():
     from fastapi import FastAPI, HTTPException
-    from fastapi.responses import HTMLResponse, FileResponse
+    from fastapi.responses import HTMLResponse, FileResponse, StreamingResponse
     from fastapi.middleware.cors import CORSMiddleware
     from pydantic import BaseModel
 
@@ -50,6 +55,41 @@ def create_app():
     HEADS_DIR.mkdir(parents=True, exist_ok=True)
     AUDIO_CACHE = REPO_ROOT / "outputs" / "webapp_cache"
     AUDIO_CACHE.mkdir(parents=True, exist_ok=True)
+
+    # ── Job tracking for async generation ──────────────────────────────────
+
+    jobs: dict[str, dict] = {}  # {job_id: {status, progress, total, events, ...}}
+
+    def _create_job(name: str, mode: str) -> str:
+        job_id = uuid.uuid4().hex[:12]
+        jobs[job_id] = {
+            "id": job_id,
+            "head": name,
+            "mode": mode,
+            "status": "running",
+            "progress": 0,
+            "total": 0,
+            "events": [],  # list of {label, status, t}
+            "error": None,
+            "cost": None,
+        }
+        return job_id
+
+    def _job_progress(job_id: str):
+        """Return a progress callback that updates the job."""
+        def callback(label: str, idx: int, total: int, status: str):
+            job = jobs.get(job_id)
+            if not job:
+                return
+            job["total"] = total
+            if status in ("ok", "skip"):
+                job["progress"] += 1
+            job["events"].append({
+                "label": label,
+                "status": status,
+                "t": time.time(),
+            })
+        return callback
 
     # ── Request models ─────────────────────────────────────────────────────
 
@@ -80,7 +120,7 @@ def create_app():
 
     # ── Helpers ─────────────────────────────────────────────────────────────
 
-    def _resolve(req_prompt: str | None, req_preset: str | None, req_name: str | None) -> tuple[str, str]:
+    def _resolve(req_prompt, req_preset, req_name):
         if req_preset and req_preset in PRESETS:
             return PRESETS[req_preset], req_name or req_preset
         elif req_prompt:
@@ -89,17 +129,26 @@ def create_app():
         else:
             raise HTTPException(400, "Provide prompt or preset")
 
-    def _save_meta(name: str, mode: str, style: str, model: str) -> None:
+    def _save_meta(name, mode, style, model):
         head_dir = HEADS_DIR / name
         head_dir.mkdir(parents=True, exist_ok=True)
         meta = {"mode": mode, "style": style, "name": name, "model": model}
         (head_dir / ".voxhelm.json").write_text(json.dumps(meta, indent=2))
 
-    def _load_meta(name: str) -> dict:
+    def _load_meta(name):
         meta_path = HEADS_DIR / name / ".voxhelm.json"
         if not meta_path.exists():
             raise HTTPException(404, f"Head '{name}' not found or missing metadata")
         return json.loads(meta_path.read_text())
+
+    def _load_cost(name):
+        cost_path = HEADS_DIR / name / "cost.json"
+        if cost_path.exists():
+            try:
+                return json.loads(cost_path.read_text())
+            except Exception:
+                pass
+        return {}
 
     # ── Routes ─────────────────────────────────────────────────────────────
 
@@ -125,7 +174,7 @@ def create_app():
             if not d.is_dir():
                 continue
             svgs = list(d.glob("*.svg"))
-            pngs = [f for f in d.glob("*.png") if f.name != "base.png"]
+            pngs = [f for f in d.glob("*.png") if f.name not in ("base.png", "blink.png", "brows_up.png")]
             mode = "svg" if svgs else "photo" if pngs else "unknown"
             asset_count = len(svgs) if mode == "svg" else len(pngs)
 
@@ -148,7 +197,7 @@ def create_app():
 
     @app.post("/api/generate-base")
     async def generate_base(req: GenerateBaseRequest):
-        """Step 1: Generate the base (sil) frame for a character."""
+        """Step 1: Generate the base (sil) frame. Synchronous — single API call."""
         style, name = _resolve(req.prompt, req.preset, req.name)
         _save_meta(name, req.mode, style, req.model)
 
@@ -169,6 +218,7 @@ def create_app():
                 "mode": req.mode,
                 "base": str(result),
                 "ok": True,
+                "cost": _load_cost(name),
             }
         except HTTPException:
             raise
@@ -177,64 +227,162 @@ def create_app():
 
     @app.post("/api/generate-visemes")
     async def generate_visemes(req: GenerateVisemesRequest):
-        """Step 2: Generate the remaining 14 viseme frames from an approved base."""
+        """Step 2: Generate visemes. Returns job ID for async tracking."""
         meta = _load_meta(req.head)
+        job_id = _create_job(req.head, meta["mode"])
 
-        try:
-            if meta["mode"] == "svg":
-                gallery = svg_gen.generate_visemes(
-                    style=meta["style"], name=req.head,
-                    model=meta.get("model", "claude-opus-4-6"),
-                    out_root=HEADS_DIR, skip_existing=req.skip_existing,
-                )
-            else:
-                gallery = photo_gen.generate_visemes(
-                    style=meta["style"], name=req.head,
-                    out_root=HEADS_DIR, skip_existing=req.skip_existing,
-                    include_blink=req.include_blink,
-                )
-            return {
-                "name": req.head,
-                "mode": meta["mode"],
-                "gallery": f"/heads/{req.head}/gallery.html",
-                "ok": True,
-            }
-        except HTTPException:
-            raise
-        except Exception as e:
-            raise HTTPException(500, str(e))
+        def _run():
+            try:
+                if meta["mode"] == "svg":
+                    svg_gen.generate_visemes(
+                        style=meta["style"], name=req.head,
+                        model=meta.get("model", "claude-opus-4-6"),
+                        out_root=HEADS_DIR, skip_existing=req.skip_existing,
+                        on_progress=_job_progress(job_id),
+                    )
+                else:
+                    photo_gen.generate_visemes(
+                        style=meta["style"], name=req.head,
+                        out_root=HEADS_DIR, skip_existing=req.skip_existing,
+                        include_blink=req.include_blink,
+                        on_progress=_job_progress(job_id),
+                    )
+                jobs[job_id]["status"] = "done"
+                jobs[job_id]["cost"] = _load_cost(req.head)
+            except Exception as e:
+                jobs[job_id]["status"] = "error"
+                jobs[job_id]["error"] = str(e)
+
+        threading.Thread(target=_run, daemon=True).start()
+
+        return {
+            "job_id": job_id,
+            "name": req.head,
+            "mode": meta["mode"],
+            "ok": True,
+        }
 
     @app.post("/api/generate")
     async def generate(req: GenerateRequest):
-        """One-shot: generate base + all visemes in one call."""
+        """One-shot: generate base + visemes. Base is sync, visemes are async."""
         style, name = _resolve(req.prompt, req.preset, req.name)
         _save_meta(name, req.mode, style, req.model)
 
+        # Step 1: Generate base synchronously
         try:
             if req.mode == "svg":
-                gallery = svg_gen.generate(
-                    style=style, name=name, model=req.model,
-                    out_root=HEADS_DIR, skip_existing=req.skip_existing,
+                svg_gen.generate_base(
+                    style=style, name=name, model=req.model, out_root=HEADS_DIR,
                 )
             elif req.mode == "photo":
-                gallery = photo_gen.generate(
-                    style=style, name=name,
-                    out_root=HEADS_DIR, skip_existing=req.skip_existing,
-                    include_blink=req.include_blink,
+                photo_gen.generate_base(
+                    style=style, name=name, out_root=HEADS_DIR,
                 )
             else:
                 raise HTTPException(400, f"Unknown mode: {req.mode}. Use 'svg' or 'photo'.")
-
-            return {
-                "name": name,
-                "mode": req.mode,
-                "gallery": f"/heads/{name}/gallery.html",
-                "ok": True,
-            }
         except HTTPException:
             raise
         except Exception as e:
             raise HTTPException(500, str(e))
+
+        # Step 2: Kick off visemes async
+        job_id = _create_job(name, req.mode)
+
+        def _run():
+            try:
+                if req.mode == "svg":
+                    svg_gen.generate_visemes(
+                        style=style, name=name,
+                        model=req.model, out_root=HEADS_DIR,
+                        skip_existing=req.skip_existing,
+                        on_progress=_job_progress(job_id),
+                    )
+                else:
+                    photo_gen.generate_visemes(
+                        style=style, name=name,
+                        out_root=HEADS_DIR, skip_existing=req.skip_existing,
+                        include_blink=req.include_blink,
+                        on_progress=_job_progress(job_id),
+                    )
+                jobs[job_id]["status"] = "done"
+                jobs[job_id]["cost"] = _load_cost(name)
+            except Exception as e:
+                jobs[job_id]["status"] = "error"
+                jobs[job_id]["error"] = str(e)
+
+        threading.Thread(target=_run, daemon=True).start()
+
+        return {
+            "job_id": job_id,
+            "name": name,
+            "mode": req.mode,
+            "ok": True,
+            "cost": _load_cost(name),
+        }
+
+    # ── Job status + SSE stream ────────────────────────────────────────────
+
+    @app.get("/api/jobs/{job_id}")
+    async def get_job(job_id: str):
+        """Poll job status."""
+        job = jobs.get(job_id)
+        if not job:
+            raise HTTPException(404, "Job not found")
+        return {
+            "id": job["id"],
+            "head": job["head"],
+            "mode": job["mode"],
+            "status": job["status"],
+            "progress": job["progress"],
+            "total": job["total"],
+            "error": job["error"],
+            "cost": job["cost"],
+        }
+
+    @app.get("/api/jobs/{job_id}/stream")
+    async def stream_job(job_id: str):
+        """SSE stream of generation progress events."""
+        job = jobs.get(job_id)
+        if not job:
+            raise HTTPException(404, "Job not found")
+
+        def event_stream():
+            seen = 0
+            while True:
+                events = job["events"]
+                # Send any new events
+                while seen < len(events):
+                    ev = events[seen]
+                    data = json.dumps({
+                        "label": ev["label"],
+                        "status": ev["status"],
+                        "progress": job["progress"],
+                        "total": job["total"],
+                    })
+                    yield f"data: {data}\n\n"
+                    seen += 1
+
+                # Check if job is done
+                if job["status"] in ("done", "error"):
+                    final = json.dumps({
+                        "status": job["status"],
+                        "progress": job["progress"],
+                        "total": job["total"],
+                        "error": job["error"],
+                        "cost": job["cost"],
+                    })
+                    yield f"event: done\ndata: {final}\n\n"
+                    return
+
+                time.sleep(0.3)
+
+        return StreamingResponse(
+            event_stream(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+
+    # ── Head assets ────────────────────────────────────────────────────────
 
     @app.get("/api/head/{name}/assets")
     async def get_head_assets(name: str):
@@ -279,6 +427,7 @@ def create_app():
             "complete": len(assets) >= 15,
             "assets": assets,
             "extras": extras,
+            "cost": _load_cost(name),
         }
 
     @app.get("/api/head/{name}/validate", response_class=HTMLResponse)
@@ -287,11 +436,9 @@ def create_app():
         head_dir = HEADS_DIR / name
         if not head_dir.exists():
             raise HTTPException(404, "Head not found")
-
         gallery = head_dir / "gallery.html"
         if gallery.exists():
             return gallery.read_text()
-
         raise HTTPException(404, "Gallery not found. Generate visemes first.")
 
     @app.post("/api/speak")

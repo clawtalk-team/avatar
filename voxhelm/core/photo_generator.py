@@ -22,7 +22,36 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Callable
 
+from dataclasses import dataclass, field
+
 from .visemes import ALL_VISEMES
+
+
+@dataclass
+class GenerationCost:
+    """Tracks cost and token usage across a generation run."""
+    calls: int = 0
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_cost_usd: float = 0.0
+    per_frame: dict = field(default_factory=dict)  # {label: cost_usd}
+
+    def add(self, label: str, usage: dict) -> None:
+        self.calls += 1
+        self.prompt_tokens += usage.get("prompt_tokens", 0)
+        self.completion_tokens += usage.get("completion_tokens", 0)
+        cost = usage.get("total_cost", 0.0)
+        self.total_cost_usd += cost
+        self.per_frame[label] = cost
+
+    def summary(self) -> dict:
+        return {
+            "calls": self.calls,
+            "prompt_tokens": self.prompt_tokens,
+            "completion_tokens": self.completion_tokens,
+            "total_cost_usd": round(self.total_cost_usd, 4),
+            "per_frame": {k: round(v, 4) for k, v in self.per_frame.items()},
+        }
 
 log = logging.getLogger(__name__)
 
@@ -83,8 +112,8 @@ def _post(payload: dict, api_key: str) -> dict:
         return json.loads(resp.read().decode("utf-8"))
 
 
-def _extract_image(resp: dict) -> bytes:
-    """Pull the base64 PNG out of the OpenRouter response."""
+def _extract_image(resp: dict) -> tuple[bytes, dict]:
+    """Pull the base64 PNG and usage/cost info out of the OpenRouter response."""
     msg = resp["choices"][0]["message"]
     images = msg.get("images") or []
     if not images:
@@ -93,11 +122,30 @@ def _extract_image(resp: dict) -> bytes:
     if not url.startswith("data:"):
         raise RuntimeError(f"Unexpected image url (not a data URL): {url[:80]}")
     b64 = url.split(",", 1)[1]
-    return base64.b64decode(b64)
+    png = base64.b64decode(b64)
+
+    # Extract usage/cost from OpenRouter response
+    usage = resp.get("usage", {})
+    # OpenRouter may also put cost in a separate field
+    total_cost = usage.get("total_cost", 0.0)
+    if not total_cost:
+        # Some OpenRouter responses have cost at top level
+        total_cost = resp.get("usage", {}).get("cost", 0.0)
+
+    return png, {
+        "prompt_tokens": usage.get("prompt_tokens", 0),
+        "completion_tokens": usage.get("completion_tokens", 0),
+        "total_cost": total_cost,
+    }
 
 
-def _generate_image(prompt: str, api_key: str, input_png: bytes | None = None) -> bytes:
-    """Call Gemini Flash Image via OpenRouter with retry."""
+def _generate_image(prompt: str, api_key: str, input_png: bytes | None = None) -> tuple[bytes, dict]:
+    """Call Gemini Flash Image via OpenRouter with retry.
+
+    Returns:
+        Tuple of (png_bytes, usage_dict) where usage_dict has
+        prompt_tokens, completion_tokens, total_cost.
+    """
     content: list = [{"type": "text", "text": prompt}]
     if input_png is not None:
         b64 = base64.b64encode(input_png).decode("ascii")
@@ -232,17 +280,33 @@ def generate_base(
     if on_progress:
         on_progress("base", 0, 1, "generating")
 
-    base_png = _generate_image(_build_base_prompt(style), api_key)
+    cost = GenerationCost()
+    base_png, usage = _generate_image(_build_base_prompt(style), api_key)
+    cost.add("base", usage)
     base_path.write_bytes(base_png)
     sil_path.write_bytes(base_png)  # sil = base portrait
-    log.info("Base portrait saved (%d bytes)", len(base_png))
+    log.info("Base portrait saved (%d bytes, $%.4f)", len(base_png), usage.get("total_cost", 0))
 
     if on_progress:
         on_progress("base", 0, 1, "ok")
 
-    # Write manifest with just the base
+    # Write manifest with just the base + cost
     manifest = {"base": "base.png", "visemes": {"sil": "sil.png"}}
     (out_dir / "manifest.json").write_text(json.dumps(manifest, indent=2))
+
+    # Save cost info
+    cost_path = out_dir / "cost.json"
+    cost_data = cost.summary()
+    if cost_path.exists():
+        try:
+            existing = json.loads(cost_path.read_text())
+            existing["base"] = cost_data
+        except Exception:
+            existing = {"base": cost_data}
+    else:
+        existing = {"base": cost_data}
+    cost_path.write_text(json.dumps(existing, indent=2))
+    log.info("Base generation cost: $%.4f", cost.total_cost_usd)
 
     # Write a single-item gallery for review
     write_gallery(out_dir, ["sil"], style, name)
@@ -322,18 +386,20 @@ def generate_visemes(
     max_workers = min(total, 6)  # cap concurrency to avoid rate limits
     completed = 0
 
-    def _do_one(item: tuple[str, Path, str]) -> tuple[str, Path, bytes | None, str | None]:
+    cost = GenerationCost()
+
+    def _do_one(item: tuple[str, Path, str]) -> tuple[str, Path, bytes | None, dict, str | None]:
         label, out_path, prompt = item
         try:
-            png = _generate_image(prompt, api_key, input_png=base_png)
-            return (label, out_path, png, None)
+            png, usage = _generate_image(prompt, api_key, input_png=base_png)
+            return (label, out_path, png, usage, None)
         except Exception as e:
-            return (label, out_path, None, str(e))
+            return (label, out_path, None, {}, str(e))
 
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
         futures = {pool.submit(_do_one, item): item for item in work}
         for future in as_completed(futures):
-            label, out_path, png, error = future.result()
+            label, out_path, png, usage, error = future.result()
             completed += 1
             if error:
                 log.error("[%d/%d] %s FAILED: %s", completed, total, label, error)
@@ -341,14 +407,36 @@ def generate_visemes(
                     on_progress(label, completed - 1, total, f"error: {error}")
             else:
                 out_path.write_bytes(png)
+                cost.add(label, usage)
                 if label in VISEME_MOUTHS:
                     manifest["visemes"][label] = f"{label}.png"
-                log.info("[%d/%d] %s OK (%d bytes)", completed, total, label, len(png))
+                frame_cost = usage.get("total_cost", 0)
+                log.info("[%d/%d] %s OK (%d bytes, $%.4f)",
+                         completed, total, label, len(png), frame_cost)
                 if on_progress:
                     on_progress(label, completed - 1, total, "ok")
 
     # Write manifest
     man_path.write_text(json.dumps(manifest, indent=2))
+
+    # Save cost info
+    cost_path = out_dir / "cost.json"
+    if cost_path.exists():
+        try:
+            existing = json.loads(cost_path.read_text())
+        except Exception:
+            existing = {}
+    else:
+        existing = {}
+    existing["visemes"] = cost.summary()
+
+    # Calculate grand total across base + visemes
+    base_cost = existing.get("base", {}).get("total_cost_usd", 0)
+    existing["total_cost_usd"] = round(base_cost + cost.total_cost_usd, 4)
+    cost_path.write_text(json.dumps(existing, indent=2))
+
+    log.info("Viseme generation cost: $%.4f (total: $%.4f)",
+             cost.total_cost_usd, existing["total_cost_usd"])
 
     gallery = write_gallery(out_dir, viseme_list, style, name)
     return gallery
