@@ -1,6 +1,6 @@
 """Tests for voxhelm.core.timeline."""
 
-from voxhelm.core.timeline import words_to_timeline
+from voxhelm.core.timeline import words_to_timeline, words_to_debug
 
 
 def test_empty_words():
@@ -57,3 +57,63 @@ def test_multiple_words():
     ]
     result = words_to_timeline(words)
     assert len(result) >= 4  # At least: sil, some phonemes, sil
+
+
+# ── Debug breakdown tests ──────────────────────────────────────────────────
+
+def test_debug_known_words():
+    words = [
+        {"word": "hello", "start": 0.0, "end": 0.4},
+        {"word": "world", "start": 0.5, "end": 0.9},
+    ]
+    debug = words_to_debug(words)
+    assert len(debug) == 2
+    assert debug[0]["word"] == "hello"
+    assert debug[0]["in_cmu"] is True
+    assert len(debug[0]["phonemes"]) > 0
+    assert len(debug[0]["visemes"]) > 0
+
+
+def test_debug_unknown_word():
+    words = [{"word": "xyzzyplugh", "start": 0.0, "end": 0.5}]
+    debug = words_to_debug(words)
+    assert len(debug) == 1
+    assert debug[0]["in_cmu"] is False
+    assert debug[0]["visemes"] == ["aa"]
+    assert debug[0]["phonemes"] == []
+
+
+def test_debug_viseme_variety():
+    """Sentence with known words should produce multiple distinct visemes."""
+    words = [
+        {"word": "shall", "start": 0.0, "end": 0.3},
+        {"word": "we", "start": 0.35, "end": 0.5},
+        {"word": "find", "start": 0.55, "end": 0.8},
+        {"word": "beach", "start": 0.85, "end": 1.1},
+        {"word": "zoo", "start": 1.15, "end": 1.4},
+    ]
+    debug = words_to_debug(words)
+    all_visemes = set()
+    for w in debug:
+        all_visemes.update(w["visemes"])
+    # These words should produce at least 8 distinct visemes
+    assert len(all_visemes) >= 8, f"Only {len(all_visemes)} visemes: {all_visemes}"
+    assert all(w["in_cmu"] for w in debug), "All test words should be in CMU"
+
+
+def test_debug_matches_timeline():
+    """Debug visemes should be a subset of timeline visemes (plus sil)."""
+    words = [
+        {"word": "hello", "start": 0.0, "end": 0.4},
+        {"word": "world", "start": 0.5, "end": 0.9},
+    ]
+    debug = words_to_debug(words)
+    timeline = words_to_timeline(words)
+
+    # Non-sil visemes from debug should all appear in the timeline
+    debug_visemes = set()
+    for w in debug:
+        debug_visemes.update(v for v in w["visemes"] if v != "sil")
+    timeline_visemes = set(e["v"] for e in timeline if e["v"] != "sil")
+    assert debug_visemes.issubset(timeline_visemes), \
+        f"Debug has {debug_visemes - timeline_visemes} not in timeline"

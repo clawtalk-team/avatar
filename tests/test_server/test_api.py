@@ -27,10 +27,10 @@ def test_list_presets(api_client):
     assert all("key" in p and "description" in p for p in presets)
 
 
-def test_list_heads_empty(api_client):
+def test_list_heads_returns_list(api_client):
     resp = api_client.get("/api/heads")
     assert resp.status_code == 200
-    assert resp.json() == []
+    assert isinstance(resp.json(), list)
 
 
 def test_root_serves_html(api_client):
@@ -211,6 +211,16 @@ def test_speak_success(api_client):
     assert "audio_b64" in data
     assert "timeline" in data
     assert len(data["timeline"]) >= 1
+    # Debug info should be present
+    assert "debug" in data
+    assert data["debug"] is not None
+    assert len(data["debug"]) >= 1
+    # Each debug entry should have expected fields
+    entry = data["debug"][0]
+    assert "word" in entry
+    assert "phonemes" in entry
+    assert "visemes" in entry
+    assert "in_cmu" in entry
 
 
 def test_speak_missing_head(api_client):

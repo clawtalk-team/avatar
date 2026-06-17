@@ -47,3 +47,38 @@ def words_to_timeline(words: list[dict]) -> list[dict]:
             deduped.append(entry)
 
     return deduped
+
+
+def words_to_debug(words: list[dict]) -> list[dict]:
+    """Return per-word debug info showing phoneme and viseme mappings.
+
+    Args:
+        words: List of {word, start, end} dicts from Deepgram STT.
+
+    Returns:
+        List of {word, start, end, phonemes, visemes, in_cmu} dicts.
+    """
+    debug = []
+    for w in words:
+        word_text = re.sub(r"[^a-z']", "", w["word"].lower())
+        phonemes = CMU.get(word_text, None)
+        if phonemes:
+            visemes = [ph_to_vis(ph) for ph in phonemes]
+            debug.append({
+                "word": w["word"],
+                "start": w["start"],
+                "end": w["end"],
+                "phonemes": phonemes,
+                "visemes": visemes,
+                "in_cmu": True,
+            })
+        else:
+            debug.append({
+                "word": w["word"],
+                "start": w["start"],
+                "end": w["end"],
+                "phonemes": [],
+                "visemes": ["aa"],
+                "in_cmu": False,
+            })
+    return debug

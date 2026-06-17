@@ -101,6 +101,12 @@
   .chip-row{display:flex;flex-wrap:wrap;gap:5px;justify-content:center;max-width:440px}
   .vis-chip{padding:3px 9px;border-radius:10px;font-size:11px;font-family:monospace;background:#1a1a1a;border:1px solid #222;color:#555;transition:all .1s}
   .vis-chip.active{background:#0a1f0f;border-color:#2a6;color:#4c9}
+  .debug-panel{background:#111;border:1px solid #222;border-radius:8px;padding:10px}
+  .debug-table{width:100%;border-collapse:collapse;font-size:11px;font-family:monospace}
+  .debug-table th{text-align:left;color:#555;padding:4px 6px;border-bottom:1px solid #222}
+  .debug-table td{padding:4px 6px;color:#888;border-bottom:1px solid #1a1a1a}
+  .debug-table .miss{color:#f66}
+  .debug-table .vis{color:#4c9;font-weight:600}
 </style>
 </head>
 <body>
@@ -213,6 +219,10 @@
       <div class="progress-bar-wrap"><div class="progress-bar" id="progress-bar"></div></div>
       <div class="status" id="speak-status"></div>
       <div class="chip-row" id="chip-row"></div>
+      <details class="debug-panel" id="debug-panel" style="display:none;width:100%;max-width:600px;margin-top:12px">
+        <summary style="cursor:pointer;font-size:12px;color:#555">Debug: Viseme Timeline</summary>
+        <div id="debug-content" style="margin-top:8px"></div>
+      </details>
     </div>
   </div>
 </main>
@@ -601,6 +611,7 @@ async function loadSentence(text, btn) {
     currentAudioB64 = data.audio_b64;
     document.getElementById('play-btn').disabled = false;
     setStatus('speak-status', `Ready (${data.timeline.length} events)`, 'ok');
+    renderDebug(data.debug, data.timeline);
   } catch(e) {
     setStatus('speak-status', e.message, 'err');
   }
@@ -648,6 +659,44 @@ async function playDemo() {
     }
   }
   rafId = requestAnimationFrame(frame);
+}
+
+// ── Debug panel ──────────────────────────────────────────────────────────────
+function renderDebug(debug, timeline) {
+  const panel = document.getElementById('debug-panel');
+  const content = document.getElementById('debug-content');
+
+  if (!debug || debug.length === 0) {
+    panel.style.display = 'none';
+    return;
+  }
+  panel.style.display = 'block';
+
+  // Word breakdown table
+  let html = '<table class="debug-table"><tr><th>Word</th><th>Time</th><th>Phonemes</th><th>Visemes</th><th>CMU?</th></tr>';
+  for (const w of debug) {
+    const cls = w.in_cmu ? '' : 'miss';
+    html += `<tr>
+      <td>${w.word}</td>
+      <td>${w.start.toFixed(2)}–${w.end.toFixed(2)}s</td>
+      <td class="${cls}">${w.phonemes.length ? w.phonemes.join(' ') : '?'}</td>
+      <td class="vis">${w.visemes.join(' ')}</td>
+      <td class="${cls}">${w.in_cmu ? 'yes' : 'NO'}</td>
+    </tr>`;
+  }
+  html += '</table>';
+
+  // Timeline summary
+  const uniqueVis = [...new Set(timeline.map(e => e.v))].sort();
+  html += `<div style="margin-top:8px;font-size:11px;color:#555">
+    <b>${timeline.length}</b> timeline events &middot;
+    <b>${uniqueVis.length}</b>/15 visemes used: <span class="vis">${uniqueVis.join(' ')}</span>
+    ${debug.filter(w => !w.in_cmu).length > 0
+      ? ` &middot; <span class="miss">${debug.filter(w => !w.in_cmu).length} unknown words</span>`
+      : ''}
+  </div>`;
+
+  content.innerHTML = html;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
