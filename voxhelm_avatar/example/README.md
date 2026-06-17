@@ -1,17 +1,35 @@
-# voxhelm_avatar_example
+# Voxhelm Avatar Example
 
-A new Flutter project.
+Demo app showing the `VoxhelmAvatar` widget with audio-driven lip-sync and idle blink animation.
 
-## Getting Started
+## Running
 
-This project is a starting point for a Flutter application.
+```bash
+cd voxhelm_avatar/example
+flutter pub get
+flutter run -d macos    # or -d chrome, -d ios, etc.
+```
 
-A few resources to get you started if this is your first Flutter project:
+## What it does
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+- Loads 15 SVG viseme frames for the `young_woman` character from bundled assets
+- Loads a pre-built phoneme timeline (`assets/data/timeline.json`)
+- Plays audio via `audioplayers` and drives the avatar with `VisemeController.tick()`
+- Shows a viseme badge tracking the current mouth shape
+- Blink animation runs independently on a random timer
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Assets
+
+SVG heads are generated with the Voxhelm CLI:
+
+```bash
+voxhelm generate --preset young_woman
+```
+
+Audio and timeline are generated with:
+
+```bash
+voxhelm speak --head young_woman --text "Hello, how are you today?"
+```
+
+The example bundles heads for all 6 presets plus Flash Image photoreal stills.
