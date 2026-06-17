@@ -435,6 +435,10 @@ function setupStage() {
   // Remove old frames (keep blink overlay)
   stage.querySelectorAll('[data-viseme]').forEach(e => e.remove());
 
+  // Hide SVG blink overlay for photo mode (photo has its own blink.png)
+  const blinkOverlay = document.getElementById('blink-overlay');
+  blinkOverlay.style.display = headMode === 'svg' ? 'block' : 'none';
+
   for (const [v, asset] of Object.entries(headAssets)) {
     if (asset.type === 'svg') {
       const wrap = document.createElement('div');
@@ -443,13 +447,13 @@ function setupStage() {
       wrap.innerHTML = asset.data;
       const svgEl = wrap.querySelector('svg');
       if (svgEl) svgEl.style.cssText = 'width:100%;height:100%';
-      stage.insertBefore(wrap, document.getElementById('blink-overlay'));
+      stage.insertBefore(wrap, blinkOverlay);
     } else {
       const img = document.createElement('img');
       img.src = asset.data;
       img.dataset.viseme = v;
       img.style.display = 'none';
-      stage.insertBefore(img, document.getElementById('blink-overlay'));
+      stage.insertBefore(img, blinkOverlay);
     }
   }
   showViseme('sil');
