@@ -346,11 +346,13 @@ def create_app():
     @app.get("/api/jobs/{job_id}/stream")
     async def stream_job(job_id: str):
         """SSE stream of generation progress events."""
+        import asyncio
+
         job = jobs.get(job_id)
         if not job:
             raise HTTPException(404, "Job not found")
 
-        def event_stream():
+        async def event_stream():
             seen = 0
             while True:
                 events = job["events"]
@@ -378,7 +380,7 @@ def create_app():
                     yield f"event: done\ndata: {final}\n\n"
                     return
 
-                time.sleep(0.3)
+                await asyncio.sleep(0.3)
 
         return StreamingResponse(
             event_stream(),
