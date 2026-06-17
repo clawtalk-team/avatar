@@ -59,6 +59,9 @@ def create_app():
 
     # ── Job tracking for async generation ──────────────────────────────────
 
+    # NOTE: In-memory job tracking. For long-running servers, completed jobs
+    # should be evicted (e.g. after 1 hour). For Lambda/serverless, swap to
+    # DynamoDB or similar persistent store.
     jobs: dict[str, dict] = {}  # {job_id: {status, progress, total, events, ...}}
 
     def _create_job(name: str, mode: str) -> str:

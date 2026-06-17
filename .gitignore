@@ -34,3 +34,4 @@ star-vector/
 
 # Tools
 .gstack/
+uv.lock

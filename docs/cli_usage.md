@@ -177,11 +177,16 @@ API endpoints:
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/api/heads` | List all generated heads |
 | `GET` | `/api/presets` | List character presets |
-| `POST` | `/api/generate-base` | Generate base frame |
-| `POST` | `/api/generate-visemes` | Generate visemes from approved base |
-| `GET` | `/api/head/{name}/assets` | Get all viseme assets |
+| `GET` | `/api/heads` | List all generated heads |
+| `POST` | `/api/generate-base` | Generate base frame (sync) |
+| `POST` | `/api/generate-visemes` | Generate visemes (async, returns job ID) |
+| `POST` | `/api/generate` | One-shot: base + visemes |
+| `GET` | `/api/jobs/{id}` | Poll job status |
+| `GET` | `/api/jobs/{id}/stream` | SSE stream of generation progress |
+| `GET` | `/api/head/{name}/assets` | Get all viseme assets + extras |
+| `GET` | `/api/head/{name}/validate` | Get validation gallery HTML |
+| `DELETE` | `/api/head/{name}` | Delete a head and all its assets |
 | `POST` | `/api/speak` | TTS + viseme timeline |
 
 ---
