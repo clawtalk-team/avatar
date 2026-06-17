@@ -1,19 +1,22 @@
 [project]
 name = "voxhelm"
-version = "0.1.0"
-description = "SVG avatar generation and audio-driven lip-sync toolkit"
+version = "0.2.0"
+description = "Avatar generation and audio-driven lip-sync toolkit — SVG cartoon and photorealistic modes"
 requires-python = ">=3.11"
 dependencies = [
-    "anthropic>=0.40",
     "typer>=0.15",
     "fastapi>=0.115",
     "uvicorn[standard]>=0.34",
+    "nltk>=3.8",
 ]
 
 [project.optional-dependencies]
+svg = ["anthropic>=0.40"]
+photo = []  # uses urllib only — no extra deps beyond OpenRouter API key
 bedrock = ["boto3"]
 openrouter = ["openai"]
-all = ["boto3", "openai"]
+all = ["anthropic>=0.40", "boto3", "openai"]
+dev = ["pytest>=8.0", "httpx>=0.27", "pytest-asyncio>=0.24", "typer>=0.15", "anthropic>=0.40"]
 
 [project.scripts]
 voxhelm = "voxhelm.cli.main:app"
@@ -23,6 +26,9 @@ include = ["voxhelm*"]
 
 [tool.setuptools.package-data]
 "voxhelm.viewer" = ["*.html"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "strict"
 
 [build-system]
 requires = ["setuptools>=68"]
