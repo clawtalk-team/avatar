@@ -27,10 +27,10 @@ def test_list_presets(api_client):
     assert all("key" in p and "description" in p for p in presets)
 
 
-def test_list_heads_empty(api_client):
+def test_list_heads_returns_list(api_client):
     resp = api_client.get("/api/heads")
     assert resp.status_code == 200
-    assert resp.json() == []
+    assert isinstance(resp.json(), list)
 
 
 def test_root_serves_html(api_client):

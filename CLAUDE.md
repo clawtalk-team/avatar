@@ -1,4 +1,20 @@
 
+## Testing
+
+Always run the full test suite before asking the user to test anything manually:
+
+```bash
+.venv/bin/pytest tests/ -v --tb=short
+```
+
+All tests must pass before:
+- Restarting the server for manual testing
+- Committing changes
+- Creating or updating a PR
+- Asking the user to verify anything in the browser
+
+If tests fail, fix them first.
+
 ## Skill routing
 
 When the user's request matches an available skill, invoke it via the Skill tool. When in doubt, invoke the skill.
