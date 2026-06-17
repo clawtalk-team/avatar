@@ -38,7 +38,8 @@ def create_app():
     from voxhelm.core import generator as svg_gen
     from voxhelm.core import photo_generator as photo_gen
     from voxhelm.core.audio import deepgram_tts, deepgram_stt_words
-    from voxhelm.core.timeline import words_to_timeline, words_to_debug
+    from voxhelm.core.timeline import words_to_timeline, aligned_to_timeline, words_to_debug
+    from voxhelm.core.aligner import is_available as aligner_available, align_audio
 
     app = FastAPI(
         title="Voxhelm Studio",
@@ -485,12 +486,42 @@ def create_app():
                 audio_bytes = audio_file.read_bytes()
                 words = deepgram_stt_words(audio_bytes, api_key)
                 words_file.write_text(json.dumps(words))
-                timeline = words_to_timeline(words)
-                timeline_file.write_text(json.dumps(timeline))
+
+                # Use wav2vec2 forced alignment if available, else CMU dict
+                alignment_method = "cmu"
+                if aligner_available():
+                    try:
+                        # Get PCM audio for alignment (no ffmpeg needed)
+                        pcm_bytes = deepgram_tts(req.text, api_key,
+                                                 encoding="linear16", sample_rate=16000)
+                        transcript = " ".join(w["word"] for w in words)
+                        aligned = align_audio(pcm_bytes, transcript)
+                        timeline = aligned_to_timeline(aligned)
+                        alignment_method = "wav2vec2"
+                    except Exception as align_err:
+                        import logging
+                        logging.getLogger("voxhelm").warning(
+                            "wav2vec2 alignment failed, falling back to CMU: %s", align_err)
+                        timeline = words_to_timeline(words)
+                else:
+                    timeline = words_to_timeline(words)
+
+                timeline_file.write_text(json.dumps({
+                    "events": timeline,
+                    "method": alignment_method,
+                }))
             except Exception as e:
                 raise HTTPException(500, f"STT failed: {e}")
 
-        timeline = json.loads(timeline_file.read_text())
+        timeline_data = json.loads(timeline_file.read_text())
+        # Support both old format (list) and new format (dict with method)
+        if isinstance(timeline_data, list):
+            timeline = timeline_data
+            alignment_method = "cmu"
+        else:
+            timeline = timeline_data.get("events", timeline_data)
+            alignment_method = timeline_data.get("method", "cmu")
+
         audio_b64 = base64.b64encode(audio_file.read_bytes()).decode()
 
         # Build debug breakdown if words are cached
@@ -507,6 +538,7 @@ def create_app():
             "text": req.text,
             "audio_b64": audio_b64,
             "timeline": timeline,
+            "alignment": alignment_method,
             "debug": debug,
         }
 
