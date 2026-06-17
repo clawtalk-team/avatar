@@ -322,6 +322,10 @@ function goToStep(n) {
     s.classList.toggle('active', sn === n);
     s.classList.toggle('done', sn < n);
   });
+  // Ensure stage is populated when entering speak demo
+  if (n === 4 && currentHead && Object.keys(headAssets).length > 0) {
+    setupStage();
+  }
 }
 
 // ── Mode toggle ──────────────────────────────────────────────────────────────

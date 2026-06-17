@@ -265,8 +265,16 @@ def generate_visemes(
     _client = client or get_llm_client(model)
     remaining = [v for v in viseme_list if v != "sil"]
 
-    # Build work items — each generates only mouth fragment
-    work: list[tuple[str, Path, str]] = []
+    # Detect whether base has structured groups for mouth-swap approach
+    has_mouth_group = bool(re.search(r'<g\s+id=["\']mouth["\']', base_svg))
+
+    if has_mouth_group:
+        log.info("Base has <g id='mouth'> — using mouth-swap approach")
+    else:
+        log.info("Base has no <g id='mouth'> — using full-SVG approach (legacy)")
+
+    # Build work items
+    work: list[tuple[str, Path, str, str]] = []  # (viseme, path, prompt, system_prompt)
     for viseme in remaining:
         if viseme not in VISEMES:
             continue
@@ -275,25 +283,34 @@ def generate_visemes(
             if on_progress:
                 on_progress(viseme, 0, len(remaining), "skip")
             continue
-        work.append((viseme, out_file, build_mouth_prompt(style, viseme, base_svg)))
+        if has_mouth_group:
+            work.append((viseme, out_file,
+                         build_mouth_prompt(style, viseme, base_svg),
+                         MOUTH_SYSTEM_PROMPT))
+        else:
+            work.append((viseme, out_file,
+                         build_prompt(style, viseme, base_svg),
+                         BASE_SYSTEM_PROMPT))
 
     total = len(work)
     if total == 0:
         log.info("All visemes already exist for '%s', nothing to generate", name)
         return write_gallery(out_dir, viseme_list, style, name)
 
-    log.info("Generating %d mouth shapes for '%s' (parallel) → %s", total, name, out_dir)
+    log.info("Generating %d visemes for '%s' (parallel) → %s", total, name, out_dir)
 
     max_workers = min(total, 4)
     completed = 0
 
-    def _do_one(item: tuple[str, Path, str]) -> tuple[str, Path, str | None, int, str | None]:
-        label, out_path, prompt = item
+    def _do_one(item: tuple[str, Path, str, str]) -> tuple[str, Path, str | None, int, str | None]:
+        label, out_path, prompt, sys_prompt = item
         try:
-            resp = _client.generate(MOUTH_SYSTEM_PROMPT, prompt)
-            mouth_content = _clean_fragment(resp.text)
-            # Insert mouth into the base SVG
-            full_svg = _swap_mouth(base_svg, mouth_content)
+            resp = _client.generate(sys_prompt, prompt)
+            if has_mouth_group and sys_prompt == MOUTH_SYSTEM_PROMPT:
+                mouth_content = _clean_fragment(resp.text)
+                full_svg = _swap_mouth(base_svg, mouth_content)
+            else:
+                full_svg = _clean_svg(resp.text)
             return (label, out_path, full_svg, resp.output_tokens, None)
         except Exception as e:
             return (label, out_path, None, 0, str(e))
