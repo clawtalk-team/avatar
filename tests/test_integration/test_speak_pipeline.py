@@ -174,3 +174,83 @@ class TestAPISpeak:
         non_sil = [e for e in timeline if e["v"] != "sil"]
         assert len(non_sil) >= 2, \
             f"Timeline has only {len(non_sil)} non-sil events"
+
+    def test_speak_returns_alignment_method(self, api_client):
+        resp = api_client.post("/api/generate", json={
+            "mode": "svg", "preset": "young_woman",
+        })
+        from tests.test_server.test_api import _wait_for_job
+        _wait_for_job(api_client, resp.json()["job_id"])
+
+        resp = api_client.post("/api/speak", json={
+            "head": "young_woman", "text": "hello world",
+        })
+        data = resp.json()
+        assert "alignment" in data
+        assert data["alignment"] in ("wav2vec2", "cmu")
+
+
+class TestAligner:
+    """Test the wav2vec2 aligner module directly."""
+
+    def test_aligner_is_available(self):
+        from voxhelm.core.aligner import is_available
+        assert is_available() is True
+
+    def test_pcm_roundtrip(self):
+        """Generate PCM, convert to waveform, verify shape."""
+        import array
+        from voxhelm.core.aligner import pcm_to_waveform
+
+        # 0.5s of silence at 16kHz
+        silence = array.array("h", [0] * 8000)
+        waveform = pcm_to_waveform(silence.tobytes())
+        assert waveform.shape == (1, 8000)
+
+    def test_aligned_to_timeline_produces_visemes(self):
+        """Aligned words should produce a valid viseme timeline."""
+        from voxhelm.core.timeline import aligned_to_timeline
+
+        aligned = [
+            {"word": "shall", "start": 0.0, "end": 0.3, "chars": [
+                {"char": "s", "start": 0.0, "end": 0.06},
+                {"char": "h", "start": 0.06, "end": 0.12},
+                {"char": "a", "start": 0.12, "end": 0.18},
+                {"char": "l", "start": 0.18, "end": 0.24},
+                {"char": "l", "start": 0.24, "end": 0.3},
+            ]},
+            {"word": "we", "start": 0.35, "end": 0.5, "chars": [
+                {"char": "w", "start": 0.35, "end": 0.42},
+                {"char": "e", "start": 0.42, "end": 0.5},
+            ]},
+            {"word": "find", "start": 0.55, "end": 0.8, "chars": [
+                {"char": "f", "start": 0.55, "end": 0.61},
+                {"char": "i", "start": 0.61, "end": 0.67},
+                {"char": "n", "start": 0.67, "end": 0.73},
+                {"char": "d", "start": 0.73, "end": 0.8},
+            ]},
+        ]
+        timeline = aligned_to_timeline(aligned)
+        visemes = set(e["v"] for e in timeline)
+        visemes.discard("sil")
+        assert len(visemes) >= 4, f"Expected 4+ visemes, got {sorted(visemes)}"
+
+    def test_alignment_uses_word_boundaries(self):
+        """Aligned timeline should use the word start/end times, not uniform."""
+        from voxhelm.core.timeline import aligned_to_timeline
+
+        # Word with known timing
+        aligned = [
+            {"word": "hello", "start": 1.0, "end": 1.5, "chars": [
+                {"char": "h", "start": 1.0, "end": 1.1},
+                {"char": "e", "start": 1.1, "end": 1.2},
+                {"char": "l", "start": 1.2, "end": 1.3},
+                {"char": "l", "start": 1.3, "end": 1.4},
+                {"char": "o", "start": 1.4, "end": 1.5},
+            ]},
+        ]
+        timeline = aligned_to_timeline(aligned)
+        # First phoneme should start at 1.0 (the word start), not 0.0
+        non_sil = [e for e in timeline if e["v"] != "sil" and e["t"] >= 1.0]
+        assert len(non_sil) >= 1, "No phonemes at word boundary"
+        assert non_sil[0]["t"] >= 1.0
