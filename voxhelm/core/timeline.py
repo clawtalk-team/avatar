@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 import re
 
-from .visemes import CMU, ph_to_vis
+from .visemes import CMU, ph_to_vis, guess_phonemes
 
 log = logging.getLogger(__name__)
 
@@ -37,9 +37,8 @@ def words_to_timeline(words: list[dict]) -> list[dict]:
 
         phonemes = CMU.get(word_text, None)
         if not phonemes:
-            timeline.append({"t": round(start, 4), "v": "aa", "ph": "?"})
-            timeline.append({"t": round(end, 4), "v": "sil", "ph": "SIL"})
-            continue
+            # Guess phonemes from spelling instead of defaulting to 'aa'
+            phonemes = guess_phonemes(word_text)
 
         ph_dur = dur / len(phonemes)
         for i, ph in enumerate(phonemes):
@@ -80,13 +79,8 @@ def aligned_to_timeline(aligned_words: list[dict]) -> list[dict]:
 
         phonemes = CMU.get(word_text, None)
         if not phonemes:
-            timeline.append({"t": round(start, 4), "v": "aa", "ph": "?"})
-            timeline.append({"t": round(end, 4), "v": "sil", "ph": "SIL"})
-            continue
+            phonemes = guess_phonemes(word_text)
 
-        # Distribute phonemes proportionally across word duration
-        # Each phoneme gets time proportional to the number of characters
-        # it typically spans (rough heuristic: equal share)
         ph_dur = dur / len(phonemes)
         for i, ph in enumerate(phonemes):
             t = start + i * ph_dur
@@ -127,12 +121,15 @@ def words_to_debug(words: list[dict]) -> list[dict]:
                 "in_cmu": True,
             })
         else:
+            guessed = guess_phonemes(word_text)
+            visemes = [ph_to_vis(ph) for ph in guessed]
             debug.append({
                 "word": w["word"],
                 "start": w["start"],
                 "end": w["end"],
-                "phonemes": [],
-                "visemes": ["aa"],
+                "phonemes": guessed,
+                "visemes": visemes,
                 "in_cmu": False,
+                "guessed": True,
             })
     return debug
