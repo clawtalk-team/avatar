@@ -44,7 +44,15 @@ def test_cmu_dict_has_common_words():
     assert "world" in CMU
 
 
-def test_cmu_entries_are_phoneme_lists():
-    for word, phonemes in CMU.items():
+def test_cmu_lookup_returns_phoneme_list():
+    from voxhelm.core.visemes import cmu_lookup
+    for word in ["hello", "world", "the", "shall", "beach", "quiet"]:
+        phonemes = cmu_lookup(word)
+        assert phonemes is not None, f"{word}: not in CMU dict"
         assert isinstance(phonemes, list), f"{word}: expected list"
         assert len(phonemes) > 0, f"{word}: empty phoneme list"
+
+
+def test_cmu_lookup_unknown_returns_none():
+    from voxhelm.core.visemes import cmu_lookup
+    assert cmu_lookup("xyzzyplugh") is None
