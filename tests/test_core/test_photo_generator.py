@@ -35,23 +35,25 @@ def test_generate_visemes_creates_pngs(tmp_heads_dir, mock_photo_generate, mock_
     gallery = generate_visemes(style="test", name="vis_photo", out_root=tmp_heads_dir)
 
     head_dir = tmp_heads_dir / "vis_photo"
-    png_files = [f for f in head_dir.glob("*.png") if f.name != "base.png" and f.name != "blink.png"]
+    png_files = [f for f in head_dir.glob("*.png") if f.name not in ("base.png", "blink.png", "brows_up.png")]
     assert len(png_files) == 15
     assert gallery.name == "gallery.html"
 
 
-def test_generate_visemes_includes_blink(tmp_heads_dir, mock_photo_generate, mock_openrouter_key):
+def test_generate_visemes_includes_extras(tmp_heads_dir, mock_photo_generate, mock_openrouter_key):
     from voxhelm.core.photo_generator import generate_base, generate_visemes
-    generate_base(style="test", name="blink_test", out_root=tmp_heads_dir)
-    generate_visemes(style="test", name="blink_test", out_root=tmp_heads_dir, include_blink=True)
-    assert (tmp_heads_dir / "blink_test" / "blink.png").exists()
+    generate_base(style="test", name="extras_test", out_root=tmp_heads_dir)
+    generate_visemes(style="test", name="extras_test", out_root=tmp_heads_dir, include_blink=True)
+    assert (tmp_heads_dir / "extras_test" / "blink.png").exists()
+    assert (tmp_heads_dir / "extras_test" / "brows_up.png").exists()
 
 
-def test_generate_visemes_no_blink(tmp_heads_dir, mock_photo_generate, mock_openrouter_key):
+def test_generate_visemes_no_extras(tmp_heads_dir, mock_photo_generate, mock_openrouter_key):
     from voxhelm.core.photo_generator import generate_base, generate_visemes
-    generate_base(style="test", name="noblink_test", out_root=tmp_heads_dir)
-    generate_visemes(style="test", name="noblink_test", out_root=tmp_heads_dir, include_blink=False)
-    assert not (tmp_heads_dir / "noblink_test" / "blink.png").exists()
+    generate_base(style="test", name="noextras_test", out_root=tmp_heads_dir)
+    generate_visemes(style="test", name="noextras_test", out_root=tmp_heads_dir, include_blink=False)
+    assert not (tmp_heads_dir / "noextras_test" / "blink.png").exists()
+    assert not (tmp_heads_dir / "noextras_test" / "brows_up.png").exists()
 
 
 def test_generate_visemes_no_base_raises(tmp_heads_dir, mock_photo_generate, mock_openrouter_key):
@@ -64,7 +66,7 @@ def test_generate_full(tmp_heads_dir, mock_photo_generate, mock_openrouter_key):
     from voxhelm.core.photo_generator import generate
     gallery = generate(style="test", name="full_photo", out_root=tmp_heads_dir)
     head_dir = tmp_heads_dir / "full_photo"
-    png_files = [f for f in head_dir.glob("*.png") if f.name != "base.png" and f.name != "blink.png"]
+    png_files = [f for f in head_dir.glob("*.png") if f.name not in ("base.png", "blink.png", "brows_up.png")]
     assert len(png_files) == 15
     assert gallery.exists()
 

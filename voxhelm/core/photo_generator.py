@@ -47,11 +47,14 @@ VISEME_MOUTHS: dict[str, str] = {
     "U":   "lips tightly rounded and pushed forward with a small opening, as when saying 'oo'",
 }
 
-# Extra non-viseme edits.
+# Extra non-viseme edits (idle animation frames).
 EXTRA_EDITS: dict[str, tuple[str, str]] = {
     "blink": ("eyes",
               "both eyes fully closed with the eyelids gently shut, as in the middle of a "
               "natural blink — relaxed lids, not squeezed"),
+    "brows_up": ("eyebrows",
+                 "both eyebrows raised about 5mm higher than neutral, giving a slightly "
+                 "surprised or interested expression — subtle, not exaggerated"),
 }
 
 
@@ -275,7 +278,8 @@ def generate_visemes(
 
     base_png = base_path.read_bytes()
     remaining = [v for v in viseme_list if v != "sil"]
-    total = len(remaining) + (1 if include_blink else 0)
+    extras_to_gen = list(EXTRA_EDITS.keys()) if include_blink else []
+    total = len(remaining) + len(extras_to_gen)
 
     log.info("Generating %d photo visemes for '%s' → %s", total, name, out_dir)
 
@@ -315,25 +319,26 @@ def generate_visemes(
             if on_progress:
                 on_progress(viseme, i, total, f"error: {e}")
 
-    # Blink frame
-    if include_blink:
-        blink_path = out_dir / "blink.png"
-        if not (skip_existing and blink_path.exists()):
-            idx = len(remaining)
+    # Extra animation frames (blink, brows_up, etc.)
+    for ei, extra_name in enumerate(extras_to_gen):
+        extra_path = out_dir / f"{extra_name}.png"
+        if skip_existing and extra_path.exists():
+            continue
+        idx = len(remaining) + ei
+        if on_progress:
+            on_progress(extra_name, idx, total, "generating")
+        try:
+            region, desc = EXTRA_EDITS[extra_name]
+            prompt = _build_extra_edit_prompt(style, region, desc)
+            png = _generate_image(prompt, api_key, input_png=base_png)
+            extra_path.write_bytes(png)
+            log.info("%s frame saved (%d bytes)", extra_name, len(png))
             if on_progress:
-                on_progress("blink", idx, total, "generating")
-            try:
-                region, desc = EXTRA_EDITS["blink"]
-                prompt = _build_extra_edit_prompt(style, region, desc)
-                png = _generate_image(prompt, api_key, input_png=base_png)
-                blink_path.write_bytes(png)
-                log.info("Blink frame saved (%d bytes)", len(png))
-                if on_progress:
-                    on_progress("blink", idx, total, "ok")
-            except Exception as e:
-                log.error("Blink FAILED: %s", e)
-                if on_progress:
-                    on_progress("blink", idx, total, f"error: {e}")
+                on_progress(extra_name, idx, total, "ok")
+        except Exception as e:
+            log.error("%s FAILED: %s", extra_name, e)
+            if on_progress:
+                on_progress(extra_name, idx, total, f"error: {e}")
 
     # Write manifest
     man_path.write_text(json.dumps(manifest, indent=2))

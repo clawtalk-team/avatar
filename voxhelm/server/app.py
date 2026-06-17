@@ -261,6 +261,14 @@ def create_app():
                 b64 = base64.b64encode(png_f.read_bytes()).decode()
                 assets[v] = {"type": "png", "data": f"data:image/png;base64,{b64}"}
 
+        # Include extra animation frames (blink, brows_up, etc.)
+        extras = {}
+        for extra_name in ["blink", "brows_up"]:
+            png_f = head_dir / f"{extra_name}.png"
+            if png_f.exists():
+                b64 = base64.b64encode(png_f.read_bytes()).decode()
+                extras[extra_name] = {"type": "png", "data": f"data:image/png;base64,{b64}"}
+
         return {
             "name": name,
             "mode": meta.get("mode", "svg" if any(
@@ -270,6 +278,7 @@ def create_app():
             "visemes": len(assets),
             "complete": len(assets) >= 15,
             "assets": assets,
+            "extras": extras,
         }
 
     @app.get("/api/head/{name}/validate", response_class=HTMLResponse)

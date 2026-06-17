@@ -141,7 +141,7 @@ def test_generate_full_photo(_patch_all):
         "--out", str(heads),
     ])
     assert result.exit_code == 0
-    png_count = len([f for f in (heads / "photo_full").glob("*.png") if f.name not in ("base.png", "blink.png")])
+    png_count = len([f for f in (heads / "photo_full").glob("*.png") if f.name not in ("base.png", "blink.png", "brows_up.png")])
     assert png_count == 15
 
 

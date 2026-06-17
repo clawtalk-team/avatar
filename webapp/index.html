@@ -221,6 +221,7 @@ let currentStep = 1;
 let currentMode = 'svg';
 let currentHead = null;
 let headAssets = {};   // {viseme: {type:'svg'|'png', data:'...'}, ...}
+let headExtras = {};   // {blink: {type:'png', data:'...'}, brows_up: {...}}
 let headMode = 'svg';
 let currentTimeline = null;
 let currentAudioB64 = null;
@@ -243,7 +244,7 @@ async function init() {
   await loadPresets();
   await loadHeads();
   buildSentenceList();
-  startBlink();
+  startIdleAnimations();
 }
 
 async function loadPresets() {
@@ -406,6 +407,7 @@ async function loadHeadAssets(name) {
   const res = await fetch(`/api/head/${name}/assets`);
   const data = await res.json();
   headAssets = data.assets || {};
+  headExtras = data.extras || {};
   headMode = data.mode || 'svg';
   document.getElementById('gallery-title').textContent = `${name.replace(/_/g, ' ')} — ${Object.keys(headAssets).length}/15 visemes`;
 }
@@ -432,13 +434,14 @@ function renderGallery() {
 // ── Step 4: Stage + speak ────────────────────────────────────────────────────
 function setupStage() {
   const stage = document.getElementById('stage');
-  // Remove old frames (keep blink overlay)
-  stage.querySelectorAll('[data-viseme]').forEach(e => e.remove());
+  // Remove old frames and extras
+  stage.querySelectorAll('[data-viseme],[data-extra]').forEach(e => e.remove());
 
-  // Hide SVG blink overlay for photo mode (photo has its own blink.png)
+  // Hide SVG blink overlay for photo mode (photo has its own blink/brows frames)
   const blinkOverlay = document.getElementById('blink-overlay');
   blinkOverlay.style.display = headMode === 'svg' ? 'block' : 'none';
 
+  // Add viseme frames
   for (const [v, asset] of Object.entries(headAssets)) {
     if (asset.type === 'svg') {
       const wrap = document.createElement('div');
@@ -456,6 +459,16 @@ function setupStage() {
       stage.insertBefore(img, blinkOverlay);
     }
   }
+
+  // Add extra animation frames (blink, brows_up) for photo mode
+  for (const [name, asset] of Object.entries(headExtras)) {
+    const img = document.createElement('img');
+    img.src = asset.data;
+    img.dataset.extra = name;
+    img.style.cssText = 'width:100%;height:100%;position:absolute;top:0;left:0;display:none;object-fit:cover;z-index:5';
+    stage.appendChild(img);
+  }
+
   showViseme('sil');
   buildChipRow();
 }
@@ -579,19 +592,60 @@ function setStatus(id, msg, cls='') {
   el.className = 'status ' + cls;
 }
 
-// ── Blink ────────────────────────────────────────────────────────────────────
+// ── Idle animations (blink + eyebrow raise) ─────────────────────────────────
 const lidL = document.getElementById('lid-l');
 const lidR = document.getElementById('lid-r');
+
+function showExtra(name, visible) {
+  const el = document.querySelector(`[data-extra="${name}"]`);
+  if (el) el.style.display = visible ? 'block' : 'none';
+}
+
+// SVG blink (cartoon mode)
 function setLids(ry) { if(lidL) lidL.setAttribute('ry',ry); if(lidR) lidR.setAttribute('ry',ry); }
 const BLINK = [0,7,14,21,28,28,21,14,7,0];
-function runBlink(cb) { BLINK.forEach((ry,i) => setTimeout(() => setLids(ry), i*20)); setTimeout(cb, BLINK.length*20); }
+
+function runSvgBlink(cb) {
+  BLINK.forEach((ry,i) => setTimeout(() => setLids(ry), i*20));
+  setTimeout(cb, BLINK.length*20);
+}
+
+// Photo blink (show blink.png for ~200ms)
+function runPhotoBlink(cb) {
+  showExtra('blink', true);
+  setTimeout(() => { showExtra('blink', false); cb(); }, 200);
+}
+
+function runBlink(cb) {
+  if (headMode === 'photo' && headExtras.blink) {
+    runPhotoBlink(cb);
+  } else {
+    runSvgBlink(cb);
+  }
+}
+
 function scheduleBlink() {
   setTimeout(() => { runBlink(() => {
     if (Math.random()<0.25) setTimeout(() => runBlink(scheduleBlink), 250);
     else scheduleBlink();
   }); }, 4000+Math.random()*5000);
 }
-function startBlink() { setTimeout(scheduleBlink, 1500+Math.random()*2000); }
+
+// Photo eyebrow raise (~300ms, every 5-10s)
+function runBrowRaise(cb) {
+  showExtra('brows_up', true);
+  setTimeout(() => { showExtra('brows_up', false); cb(); }, 300);
+}
+
+function scheduleBrows() {
+  if (headMode !== 'photo' || !headExtras.brows_up) return;
+  setTimeout(() => { runBrowRaise(scheduleBrows); }, 5000+Math.random()*5000);
+}
+
+function startIdleAnimations() {
+  setTimeout(scheduleBlink, 1500+Math.random()*2000);
+  setTimeout(scheduleBrows, 3000+Math.random()*3000);
+}
 
 // ── Boot ─────────────────────────────────────────────────────────────────────
 init();
