@@ -15,7 +15,7 @@ from .visemes import VISEMES, ALL_VISEMES
 
 log = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = """You are an expert SVG illustrator specialising in cartoon character design.
+BASE_SYSTEM_PROMPT = """You are an expert SVG illustrator specialising in cartoon character design.
 You produce clean, self-contained SVG files (no external assets, no JavaScript).
 Your SVGs use a 512x512 viewBox, are expressive and appealing, and use smooth bezier curves.
 All elements are within the SVG — no <image> or <use> with external hrefs.
@@ -23,9 +23,60 @@ Reply with ONLY the SVG markup — no code fences, no explanation, no extra text
 The SVG must start with <svg and end with </svg>.
 """
 
+MOUTH_SYSTEM_PROMPT = """You are an expert SVG illustrator. You produce SVG path elements for
+cartoon mouth shapes. Reply with ONLY the SVG elements — no code fences, no explanation.
+Your output will be inserted inside an existing <g id="mouth"> group in a 512x512 SVG.
+Output raw SVG elements (paths, ellipses, etc.) — NOT a complete <svg> document.
+"""
+
+
+def build_base_prompt(style: str) -> str:
+    """Build the prompt for generating the structured base SVG."""
+    return f"""Draw a cartoon face in this style: {style}
+
+Character requirements:
+- Friendly, appealing cartoon face on a 512x512 canvas
+- Face centered in the canvas with some padding
+- Expressive eyes (open, with pupils/irises)
+- Eyebrows showing a neutral or slightly happy expression
+- Ears visible on the sides
+- Simple neck and shoulders at the bottom (optional)
+- Clean flat-design aesthetic with smooth curves
+- Mouth: closed, lips neutral, relaxed (this is the silent/resting position)
+
+CRITICAL STRUCTURE — you MUST use these exact group IDs:
+- Wrap the entire head/hair/ears/neck in <g id="head">...</g>
+- Wrap both eyes (whites, irises, pupils) in <g id="eyes">...</g>
+- Wrap both eyebrows in <g id="brows">...</g>
+- Wrap the mouth (lips, any teeth/tongue) in <g id="mouth">...</g>
+
+The groups must be in this order: head, eyes, brows, mouth (mouth on top).
+The mouth must be clearly readable at small sizes.
+Hair MUST overlap and sit on top of the head shape using proper layering.
+"""
+
+
+def build_mouth_prompt(style: str, viseme: str, base_svg: str) -> str:
+    """Build the prompt for generating just the mouth paths for a viseme."""
+    v = VISEMES[viseme]
+    return f"""Here is a cartoon face SVG. I need you to generate ONLY the mouth elements
+for the viseme "{viseme}" (phonemes: {v['phonemes']}).
+
+Mouth shape: {v['mouth']}
+
+The output will replace the contents of <g id="mouth"> in this SVG:
+
+{base_svg[:4000]}
+
+Generate ONLY the SVG elements (paths, ellipses, rects, etc.) that go inside <g id="mouth">.
+Match the same art style, colours, and stroke widths as the existing mouth.
+Do NOT output a complete <svg> tag. Do NOT output the <g id="mouth"> wrapper — just the contents.
+The mouth must be positioned correctly relative to the face (same center point as the original mouth).
+"""
+
 
 def build_prompt(style: str, viseme: str, first_svg: str | None) -> str:
-    """Build the generation prompt for a single viseme frame."""
+    """Legacy: build a full-SVG generation prompt (used by one-shot generate)."""
     v = VISEMES[viseme]
     base = f"""Draw a cartoon face in this style: {style}
 
@@ -67,6 +118,29 @@ def _clean_svg(text: str) -> str:
         text = re.sub(r"\n?```$", "", text)
         text = text.strip()
     return text
+
+
+def _clean_fragment(text: str) -> str:
+    """Clean an SVG fragment (mouth paths) — strip fences and any wrapping tags."""
+    text = _clean_svg(text)
+    # Strip any accidental <svg> wrapper
+    text = re.sub(r'^<svg[^>]*>', '', text)
+    text = re.sub(r'</svg>\s*$', '', text)
+    # Strip any accidental <g id="mouth"> wrapper
+    text = re.sub(r'^<g[^>]*id=["\']mouth["\'][^>]*>', '', text)
+    text = re.sub(r'</g>\s*$', '', text)
+    return text.strip()
+
+
+def _swap_mouth(base_svg: str, new_mouth_content: str) -> str:
+    """Replace the <g id="mouth">...</g> content in the base SVG."""
+    pattern = r'(<g\s+id=["\']mouth["\'][^>]*>)(.*?)(</g>)'
+    replacement = rf'\g<1>{new_mouth_content}\g<3>'
+    result, count = re.subn(pattern, replacement, base_svg, count=1, flags=re.DOTALL)
+    if count == 0:
+        log.warning("Could not find <g id='mouth'> in base SVG — appending mouth before </svg>")
+        result = base_svg.replace('</svg>', f'<g id="mouth">{new_mouth_content}</g></svg>')
+    return result
 
 
 def write_gallery(out_dir: Path, visemes: list[str], style: str, name: str) -> Path:
@@ -120,9 +194,11 @@ def generate_base(
     on_progress: Callable[[str, int, int, str], None] | None = None,
     client: LLMClient | None = None,
 ) -> Path:
-    """Generate the base (sil) SVG frame for a character.
+    """Generate the structured base (sil) SVG frame for a character.
 
-    This is step 1 of the workflow: generate base → review → generate visemes.
+    The base SVG uses named groups (<g id="head">, <g id="eyes">,
+    <g id="brows">, <g id="mouth">) so that viseme generation can
+    swap just the mouth content without regenerating the entire face.
 
     Returns:
         Path to the generated sil.svg file.
@@ -136,8 +212,8 @@ def generate_base(
         on_progress("sil", 0, 1, "generating")
 
     _client = client or get_llm_client(model)
-    prompt = build_prompt(style, "sil", None)
-    resp = _client.generate(SYSTEM_PROMPT, prompt)
+    prompt = build_base_prompt(style)
+    resp = _client.generate(BASE_SYSTEM_PROMPT, prompt)
     svg_text = _clean_svg(resp.text)
 
     if not svg_text.startswith("<svg"):
@@ -164,9 +240,12 @@ def generate_visemes(
     on_progress: Callable[[str, int, int, str], None] | None = None,
     client: LLMClient | None = None,
 ) -> Path:
-    """Generate the remaining viseme SVGs using an existing base (sil) as reference.
+    """Generate viseme SVGs by swapping mouth content in the structured base.
 
-    This is step 2 of the workflow: generate base → review → generate visemes.
+    Instead of regenerating the entire face for each viseme, this generates
+    only the mouth paths and inserts them into the base SVG. This guarantees
+    zero identity drift — head, hair, eyes, ears are the same SVG elements.
+
     Requires sil.svg to already exist in the output directory.
 
     Returns:
@@ -182,11 +261,11 @@ def generate_visemes(
             "Run 'voxhelm generate-base' first."
         )
 
-    first_svg = sil_path.read_text()
+    base_svg = sil_path.read_text()
     _client = client or get_llm_client(model)
     remaining = [v for v in viseme_list if v != "sil"]
 
-    # Build work items
+    # Build work items — each generates only mouth fragment
     work: list[tuple[str, Path, str]] = []
     for viseme in remaining:
         if viseme not in VISEMES:
@@ -196,26 +275,26 @@ def generate_visemes(
             if on_progress:
                 on_progress(viseme, 0, len(remaining), "skip")
             continue
-        work.append((viseme, out_file, build_prompt(style, viseme, first_svg)))
+        work.append((viseme, out_file, build_mouth_prompt(style, viseme, base_svg)))
 
     total = len(work)
     if total == 0:
         log.info("All visemes already exist for '%s', nothing to generate", name)
         return write_gallery(out_dir, viseme_list, style, name)
 
-    log.info("Generating %d visemes for '%s' (parallel) → %s", total, name, out_dir)
+    log.info("Generating %d mouth shapes for '%s' (parallel) → %s", total, name, out_dir)
 
-    max_workers = min(total, 4)  # Bedrock/Claude may have lower rate limits than Gemini
+    max_workers = min(total, 4)
     completed = 0
 
     def _do_one(item: tuple[str, Path, str]) -> tuple[str, Path, str | None, int, str | None]:
         label, out_path, prompt = item
         try:
-            resp = _client.generate(SYSTEM_PROMPT, prompt)
-            svg_text = _clean_svg(resp.text)
-            if not svg_text.startswith("<svg"):
-                log.warning("Unexpected response for %s: %s", label, svg_text[:80])
-            return (label, out_path, svg_text, resp.output_tokens, None)
+            resp = _client.generate(MOUTH_SYSTEM_PROMPT, prompt)
+            mouth_content = _clean_fragment(resp.text)
+            # Insert mouth into the base SVG
+            full_svg = _swap_mouth(base_svg, mouth_content)
+            return (label, out_path, full_svg, resp.output_tokens, None)
         except Exception as e:
             return (label, out_path, None, 0, str(e))
 
@@ -230,7 +309,7 @@ def generate_visemes(
                     on_progress(label, completed - 1, total, f"error: {error}")
             else:
                 out_path.write_text(svg_text)
-                log.info("[%d/%d] %s OK (%d chars, %d tok)",
+                log.info("[%d/%d] %s OK (%d mouth chars, %d tok)",
                          completed, total, label, len(svg_text), tokens)
                 if on_progress:
                     on_progress(label, completed - 1, total, "ok")

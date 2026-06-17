@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from tests.fixtures.samples import SAMPLE_SVG, MINIMAL_PNG, FAKE_MP3, FAKE_WORDS
+from tests.fixtures.samples import SAMPLE_SVG, SAMPLE_MOUTH, MINIMAL_PNG, FAKE_MP3, FAKE_WORDS
 
 
 # ── Directory fixtures ──────────────────────────────────────────────────────
@@ -36,10 +36,17 @@ def tmp_repo_root(tmp_path):
 
 @pytest.fixture
 def mock_llm_client():
-    """LLMClient that returns a minimal valid SVG."""
+    """LLMClient that returns structured SVG for base or mouth fragment for visemes."""
     from voxhelm.core.api_client import LLMClient, LLMResponse
+
+    def _smart_generate(system: str, prompt: str, max_tokens: int = 4096) -> LLMResponse:
+        # Return mouth fragment for mouth-specific prompts, full SVG otherwise
+        if "mouth" in system.lower() and "inside" in system.lower():
+            return LLMResponse(text=SAMPLE_MOUTH, output_tokens=50)
+        return LLMResponse(text=SAMPLE_SVG, output_tokens=100)
+
     client = MagicMock(spec=LLMClient)
-    client.generate.return_value = LLMResponse(text=SAMPLE_SVG, output_tokens=100)
+    client.generate.side_effect = _smart_generate
     return client
 
 

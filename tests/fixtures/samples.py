@@ -1,14 +1,19 @@
 """Test fixtures — sample data for mocking external APIs."""
 
-# Minimal valid SVG (512x512 viewBox, simple circle face)
+# Minimal valid SVG with structured groups (512x512 viewBox)
 SAMPLE_SVG = (
     '<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">'
-    '<circle cx="256" cy="256" r="200" fill="#F5C5A3"/>'
-    '<circle cx="210" cy="220" r="20" fill="#333"/>'
-    '<circle cx="302" cy="220" r="20" fill="#333"/>'
-    '<path d="M 210 320 Q 256 350 302 320" stroke="#333" fill="none" stroke-width="4"/>'
+    '<g id="head"><circle cx="256" cy="256" r="200" fill="#F5C5A3"/></g>'
+    '<g id="eyes"><circle cx="210" cy="220" r="20" fill="#333"/>'
+    '<circle cx="302" cy="220" r="20" fill="#333"/></g>'
+    '<g id="brows"><path d="M 190 200 Q 210 190 230 200" stroke="#333" fill="none"/>'
+    '<path d="M 282 200 Q 302 190 322 200" stroke="#333" fill="none"/></g>'
+    '<g id="mouth"><path d="M 210 320 Q 256 350 302 320" stroke="#333" fill="none" stroke-width="4"/></g>'
     '</svg>'
 )
+
+# Sample mouth fragment (what the LLM returns for viseme generation)
+SAMPLE_MOUTH = '<path d="M 210 310 Q 256 360 302 310" stroke="#333" fill="none" stroke-width="4"/>'
 
 # Minimal 1x1 transparent PNG (68 bytes)
 MINIMAL_PNG = (
