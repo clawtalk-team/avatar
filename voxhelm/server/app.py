@@ -38,7 +38,7 @@ def create_app():
     from voxhelm.core import generator as svg_gen
     from voxhelm.core import photo_generator as photo_gen
     from voxhelm.core.audio import deepgram_tts, deepgram_stt_words
-    from voxhelm.core.timeline import words_to_timeline
+    from voxhelm.core.timeline import words_to_timeline, words_to_debug
 
     app = FastAPI(
         title="Voxhelm Studio",
@@ -478,10 +478,13 @@ def create_app():
             except Exception as e:
                 raise HTTPException(500, f"TTS failed: {e}")
 
+        words_file = AUDIO_CACHE / f"{cache_key}_words.json"
+
         if not timeline_file.exists():
             try:
                 audio_bytes = audio_file.read_bytes()
                 words = deepgram_stt_words(audio_bytes, api_key)
+                words_file.write_text(json.dumps(words))
                 timeline = words_to_timeline(words)
                 timeline_file.write_text(json.dumps(timeline))
             except Exception as e:
@@ -489,11 +492,22 @@ def create_app():
 
         timeline = json.loads(timeline_file.read_text())
         audio_b64 = base64.b64encode(audio_file.read_bytes()).decode()
+
+        # Build debug breakdown if words are cached
+        debug = None
+        if words_file.exists():
+            try:
+                words = json.loads(words_file.read_text())
+                debug = words_to_debug(words)
+            except Exception:
+                pass
+
         return {
             "head": req.head,
             "text": req.text,
             "audio_b64": audio_b64,
             "timeline": timeline,
+            "debug": debug,
         }
 
     @app.get("/heads/{name}/{file}")

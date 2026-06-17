@@ -211,6 +211,16 @@ def test_speak_success(api_client):
     assert "audio_b64" in data
     assert "timeline" in data
     assert len(data["timeline"]) >= 1
+    # Debug info should be present
+    assert "debug" in data
+    assert data["debug"] is not None
+    assert len(data["debug"]) >= 1
+    # Each debug entry should have expected fields
+    entry = data["debug"][0]
+    assert "word" in entry
+    assert "phonemes" in entry
+    assert "visemes" in entry
+    assert "in_cmu" in entry
 
 
 def test_speak_missing_head(api_client):
