@@ -240,6 +240,25 @@ def test_job_not_found(api_client):
     assert resp.status_code == 404
 
 
+# ── Delete head ────────────────────────────────────────────────────────────
+
+def test_delete_head(api_client):
+    api_client.post("/api/generate-base", json={
+        "mode": "svg", "preset": "young_woman",
+    })
+    resp = api_client.delete("/api/head/young_woman")
+    assert resp.status_code == 200
+    assert resp.json()["deleted"] is True
+    # Verify it's gone
+    resp = api_client.get("/api/head/young_woman/assets")
+    assert resp.status_code == 404
+
+
+def test_delete_head_not_found(api_client):
+    resp = api_client.delete("/api/head/nonexistent")
+    assert resp.status_code == 404
+
+
 # ── Head list after generation ─────────────────────────────────────────────
 
 def test_list_heads_after_generate(api_client):

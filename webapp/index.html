@@ -23,6 +23,8 @@
   .head-badge{font-size:9px;padding:2px 6px;border-radius:4px;font-weight:600;text-transform:uppercase}
   .head-badge.svg{background:#1a2a1a;color:#4c9}
   .head-badge.photo{background:#1a1a2a;color:#7af}
+  .head-delete{font-size:14px;color:#444;cursor:pointer;margin-left:auto;padding:4px 6px;border-radius:4px;transition:all .12s}
+  .head-delete:hover{color:#e44;background:#2a1a1a}
 
   /* ── Main area ── */
   .main{flex:1;display:flex;flex-direction:column;overflow:hidden}
@@ -279,14 +281,34 @@ async function loadHeads() {
   for (const h of heads) {
     const card = document.createElement('div');
     card.className = 'head-card' + (currentHead === h.name ? ' active' : '');
-    card.onclick = () => selectHead(h.name);
+    card.onclick = (e) => { if (!e.target.classList.contains('head-delete')) selectHead(h.name); };
     card.innerHTML = `
       <div>
         <div class="head-name">${h.name.replace(/_/g, ' ')}</div>
         <div class="head-meta">${h.visemes} visemes ${h.complete ? '✓' : ''}</div>
       </div>
-      <span class="head-badge ${h.mode}">${h.mode}</span>`;
+      <span class="head-badge ${h.mode}">${h.mode}</span>
+      <span class="head-delete" title="Delete" onclick="deleteHead('${h.name}', event)">✕</span>`;
     list.appendChild(card);
+  }
+}
+
+// ── Delete head ──────────────────────────────────────────────────────────────
+async function deleteHead(name, event) {
+  event.stopPropagation();
+  if (!confirm(`Delete "${name.replace(/_/g, ' ')}" and all its assets?`)) return;
+  try {
+    const res = await fetch(`/api/head/${name}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('Delete failed');
+    if (currentHead === name) {
+      currentHead = null;
+      headAssets = {};
+      headExtras = {};
+      goToStep(1);
+    }
+    await loadHeads();
+  } catch(e) {
+    alert('Failed to delete: ' + e.message);
   }
 }
 

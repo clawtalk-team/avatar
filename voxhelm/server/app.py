@@ -17,6 +17,7 @@ import base64
 import json
 import os
 import re
+import shutil
 import threading
 import time
 import uuid
@@ -429,6 +430,15 @@ def create_app():
             "extras": extras,
             "cost": _load_cost(name),
         }
+
+    @app.delete("/api/head/{name}")
+    async def delete_head(name: str):
+        """Delete a generated head and all its assets."""
+        head_dir = HEADS_DIR / name
+        if not head_dir.exists():
+            raise HTTPException(404, "Head not found")
+        shutil.rmtree(head_dir)
+        return {"name": name, "deleted": True}
 
     @app.get("/api/head/{name}/validate", response_class=HTMLResponse)
     async def validate_head(name: str):
