@@ -507,18 +507,20 @@ function setupStage() {
   // Add viseme frames
   for (const [v, asset] of Object.entries(headAssets)) {
     if (asset.type === 'svg') {
-      const wrap = document.createElement('div');
-      wrap.style.cssText = 'width:100%;height:100%;position:absolute;top:0;left:0;display:none';
-      wrap.dataset.viseme = v;
-      wrap.innerHTML = asset.data;
-      const svgEl = wrap.querySelector('svg');
-      if (svgEl) svgEl.style.cssText = 'width:100%;height:100%';
-      stage.insertBefore(wrap, blinkOverlay);
+      // Parse the SVG and set data-viseme directly on the <svg> element
+      const tmp = document.createElement('div');
+      tmp.innerHTML = asset.data;
+      const svgEl = tmp.querySelector('svg');
+      if (svgEl) {
+        svgEl.dataset.viseme = v;
+        svgEl.style.cssText = 'width:100%;height:100%;position:absolute;top:0;left:0;display:none';
+        stage.insertBefore(svgEl, blinkOverlay);
+      }
     } else {
       const img = document.createElement('img');
       img.src = asset.data;
       img.dataset.viseme = v;
-      img.style.display = 'none';
+      img.style.cssText = 'width:100%;height:100%;position:absolute;top:0;left:0;display:none;object-fit:cover';
       stage.insertBefore(img, blinkOverlay);
     }
   }
