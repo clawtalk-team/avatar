@@ -190,6 +190,10 @@ class TestAPISpeak:
         assert data["alignment"] in ("wav2vec2", "cmu")
 
 
+@pytest.mark.skipif(
+    not __import__("voxhelm.core.aligner", fromlist=["is_available"]).is_available(),
+    reason="torch/torchaudio not installed",
+)
 class TestAligner:
     """Test the wav2vec2 aligner module directly."""
 

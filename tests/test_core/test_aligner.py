@@ -3,13 +3,16 @@
 import pytest
 from voxhelm.core.aligner import is_available, pcm_to_waveform
 
+_torch_available = is_available()
 
+
+@pytest.mark.skipif(not _torch_available, reason="torch/torchaudio not installed")
 def test_is_available():
     """wav2vec2 alignment should be available if torch is installed."""
-    # In our test env torch is installed
     assert is_available() is True
 
 
+@pytest.mark.skipif(not _torch_available, reason="torch not installed")
 def test_pcm_to_waveform():
     """Convert raw PCM16 to torch tensor."""
     import array
@@ -22,6 +25,7 @@ def test_pcm_to_waveform():
     assert waveform.max().item() == 0.0
 
 
+@pytest.mark.skipif(not _torch_available, reason="torch not installed")
 def test_pcm_to_waveform_sine():
     """Convert a sine wave PCM to tensor and check range."""
     import array
