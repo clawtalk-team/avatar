@@ -610,8 +610,9 @@ async function loadSentence(text, btn) {
     currentTimeline = data.timeline;
     currentAudioB64 = data.audio_b64;
     document.getElementById('play-btn').disabled = false;
-    setStatus('speak-status', `Ready (${data.timeline.length} events)`, 'ok');
-    renderDebug(data.debug, data.timeline);
+    const method = data.alignment === 'wav2vec2' ? 'wav2vec2' : 'CMU dict';
+    setStatus('speak-status', `Ready (${data.timeline.length} events, ${method})`, 'ok');
+    renderDebug(data.debug, data.timeline, data.alignment);
   } catch(e) {
     setStatus('speak-status', e.message, 'err');
   }
@@ -662,7 +663,7 @@ async function playDemo() {
 }
 
 // ── Debug panel ──────────────────────────────────────────────────────────────
-function renderDebug(debug, timeline) {
+function renderDebug(debug, timeline, alignment) {
   const panel = document.getElementById('debug-panel');
   const content = document.getElementById('debug-content');
 
@@ -688,9 +689,13 @@ function renderDebug(debug, timeline) {
 
   // Timeline summary
   const uniqueVis = [...new Set(timeline.map(e => e.v))].sort();
+  const methodLabel = alignment === 'wav2vec2'
+    ? '<span style="color:#4c9">wav2vec2 aligned</span>'
+    : '<span style="color:#a8a">CMU dict (uniform)</span>';
   html += `<div style="margin-top:8px;font-size:11px;color:#555">
-    <b>${timeline.length}</b> timeline events &middot;
-    <b>${uniqueVis.length}</b>/15 visemes used: <span class="vis">${uniqueVis.join(' ')}</span>
+    ${methodLabel} &middot;
+    <b>${timeline.length}</b> events &middot;
+    <b>${uniqueVis.length}</b>/15 visemes: <span class="vis">${uniqueVis.join(' ')}</span>
     ${debug.filter(w => !w.in_cmu).length > 0
       ? ` &middot; <span class="miss">${debug.filter(w => !w.in_cmu).length} unknown words</span>`
       : ''}
