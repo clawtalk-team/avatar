@@ -256,6 +256,7 @@ class AnimationModeController extends ChangeNotifier {
   AnimationMode _mode = AnimationMode.idle;
   Ticker? _ticker;
   Duration _elapsed = Duration.zero;
+  Duration _modeStartOffset = Duration.zero;
   bool _running = false;
 
   /// Current group transforms, updated each tick.
@@ -282,7 +283,7 @@ class AnimationModeController extends ChangeNotifier {
   set mode(AnimationMode value) {
     if (_mode == value) return;
     _mode = value;
-    _elapsed = Duration.zero;
+    _modeStartOffset = _elapsed;
     if (value == AnimationMode.speaking) {
       _currentTransforms = {
         'head': GroupTransform.neutral,
@@ -323,6 +324,7 @@ class AnimationModeController extends ChangeNotifier {
     _running = false;
     _ticker?.stop();
     _elapsed = Duration.zero;
+    _modeStartOffset = Duration.zero;
     _currentTransforms = {
       'head': GroupTransform.neutral,
       'eyes': GroupTransform.neutral,
@@ -344,8 +346,8 @@ class AnimationModeController extends ChangeNotifier {
     final seq = _getSequence();
     if (seq == null) return;
 
-    final ms = elapsed.inMicroseconds / 1000.0;
-    final tNorm = (ms % seq.durationMs) / seq.durationMs;
+    final ms = (elapsed - _modeStartOffset).inMicroseconds / 1000.0;
+    final tNorm = (ms.abs() % seq.durationMs) / seq.durationMs;
 
     // Find bracketing keyframes
     final kfs = seq.keyframes;

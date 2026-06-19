@@ -90,6 +90,10 @@ class _VoxhelmAvatarState extends State<VoxhelmAvatar> {
   /// Pre-parsed SVG widgets keyed by viseme name (no animation transforms).
   final Map<String, Widget> _svgCache = {};
 
+  /// Cache key for the last rendered animated SVG to avoid re-parsing.
+  String? _lastAnimCacheKey;
+  Widget? _lastAnimWidget;
+
   @override
   void initState() {
     super.initState();
@@ -151,17 +155,30 @@ class _VoxhelmAvatarState extends State<VoxhelmAvatar> {
       return _svgCache[viseme] ?? _svgCache['sil'];
     }
 
-    // Apply transforms by modifying the SVG string
+    // Apply transforms by modifying the SVG string.
+    // Quantize transform values to reduce re-parses (~10 updates/sec instead of 60).
+    final transforms = animCtrl.transforms;
+    final cacheKey = '$viseme|${transforms.entries.map((e) =>
+        '${e.key}:${(e.value.tx * 2).round()},${(e.value.ty * 2).round()},'
+        '${(e.value.r * 2).round()},${(e.value.sx * 100).round()},'
+        '${(e.value.sy * 100).round()}').join('|')}';
+
+    if (cacheKey == _lastAnimCacheKey && _lastAnimWidget != null) {
+      return _lastAnimWidget;
+    }
+
     final svgString = widget.visemeSet.svgs[viseme] ??
         widget.visemeSet.svgs['sil'];
     if (svgString == null) return null;
 
-    final transformed = _injectTransforms(svgString, animCtrl.transforms);
-    return SvgPicture.string(
+    final transformed = _injectTransforms(svgString, transforms);
+    _lastAnimCacheKey = cacheKey;
+    _lastAnimWidget = SvgPicture.string(
       transformed,
       width: widget.size,
       height: widget.size,
     );
+    return _lastAnimWidget;
   }
 
   /// Inject transform attributes into SVG group tags.

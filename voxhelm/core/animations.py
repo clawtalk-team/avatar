@@ -514,6 +514,11 @@ def extract_frames(mp4_path: str, out_dir: str, prefix: str, fps: int = 8) -> li
     from pathlib import Path
 
     Path(out_dir).mkdir(parents=True, exist_ok=True)
+
+    # Clear any existing frames from a previous generation
+    for old in glob.glob(f"{out_dir}/{prefix}_*.png"):
+        Path(old).unlink()
+
     pattern = f"{out_dir}/{prefix}_%03d.png"
 
     subprocess.run(
