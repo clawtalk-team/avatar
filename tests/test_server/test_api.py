@@ -346,3 +346,29 @@ def test_serve_head_file_svg(api_client):
 def test_serve_head_file_not_found(api_client):
     resp = api_client.get("/heads/nonexistent/sil.svg")
     assert resp.status_code == 404
+
+
+# ── Animations API ───────────────────────────────────────────────────────
+
+def test_list_animations(api_client):
+    resp = api_client.get("/api/animations")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "idle" in data
+    assert "listening" in data
+    assert "thinking" in data
+    for mode_name, seq in data.items():
+        assert "duration_ms" in seq
+        assert "keyframes" in seq
+        assert len(seq["keyframes"]) >= 4
+        # First and last keyframes should be at t=0 and t=1
+        assert seq["keyframes"][0]["t"] == 0.0
+        assert seq["keyframes"][-1]["t"] == 1.0
+
+
+def test_webapp_has_animation_mode_buttons(api_client):
+    resp = api_client.get("/")
+    html = resp.text
+    assert "anim-btn" in html
+    assert "setAnimMode" in html
+    assert "/api/animations" in html
