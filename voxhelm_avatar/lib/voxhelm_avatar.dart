@@ -25,6 +25,7 @@
 /// ```
 library voxhelm_avatar;
 
+export 'src/animation_mode_controller.dart';
 export 'src/avatar_widget.dart';
 export 'src/viseme_controller.dart';
 export 'src/blink_controller.dart';

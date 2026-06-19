@@ -28,6 +28,9 @@ from voxhelm import REPO_ROOT
 
 
 def create_app():
+    from voxhelm import load_env
+    load_env()
+
     from fastapi import FastAPI, HTTPException
     from fastapi.responses import HTMLResponse, FileResponse, StreamingResponse
     from fastapi.middleware.cors import CORSMiddleware
@@ -38,7 +41,11 @@ def create_app():
     from voxhelm.core import generator as svg_gen
     from voxhelm.core import photo_generator as photo_gen
     from voxhelm.core.audio import deepgram_tts, deepgram_stt_words
-    from voxhelm.core.timeline import words_to_timeline, words_to_debug
+    from voxhelm.core.timeline import words_to_timeline, aligned_to_timeline, words_to_debug
+    from voxhelm.core.aligner import is_available as aligner_available, align_audio
+    from voxhelm.core.animations import (
+        get_all_animations, AnimationMode, generate_anim_video,
+    )
 
     app = FastAPI(
         title="Voxhelm Studio",
@@ -229,9 +236,36 @@ def create_app():
         except Exception as e:
             raise HTTPException(500, str(e))
 
+    def _generate_all_anim_videos(name: str, job_id: str):
+        """Generate idle/listening/thinking animation videos for a head.
+
+        Called after viseme generation completes. Runs sequentially
+        (each takes ~90s) and reports progress on the same job.
+        """
+        api_key = os.environ.get("OPENROUTER_API_KEY", "")
+        if not api_key:
+            return  # silently skip if no key
+
+        import logging
+        log = logging.getLogger("voxhelm")
+
+        for mode in AnimationMode:
+            try:
+                log.info("Generating %s animation video for '%s'", mode.value, name)
+                generate_anim_video(
+                    name=name,
+                    mode=mode,
+                    api_key=api_key,
+                    out_root=str(HEADS_DIR),
+                    on_progress=_job_progress(job_id),
+                )
+            except Exception as e:
+                log.warning("Animation video %s failed for '%s': %s",
+                            mode.value, name, e)
+
     @app.post("/api/generate-visemes")
     async def generate_visemes(req: GenerateVisemesRequest):
-        """Step 2: Generate visemes. Returns job ID for async tracking."""
+        """Step 2: Generate visemes, then animation videos. Returns job ID."""
         meta = _load_meta(req.head)
         job_id = _create_job(req.head, meta["mode"])
 
@@ -253,6 +287,9 @@ def create_app():
                     )
                 jobs[job_id]["status"] = "done"
                 jobs[job_id]["cost"] = _load_cost(req.head)
+
+                # Generate animation videos (best-effort, doesn't block viseme result)
+                _generate_all_anim_videos(req.head, job_id)
             except Exception as e:
                 jobs[job_id]["status"] = "error"
                 jobs[job_id]["error"] = str(e)
@@ -310,6 +347,9 @@ def create_app():
                     )
                 jobs[job_id]["status"] = "done"
                 jobs[job_id]["cost"] = _load_cost(name)
+
+                # Generate animation videos (best-effort, doesn't block viseme result)
+                _generate_all_anim_videos(name, job_id)
             except Exception as e:
                 jobs[job_id]["status"] = "error"
                 jobs[job_id]["error"] = str(e)
@@ -387,6 +427,77 @@ def create_app():
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
+
+    # ── Animation modes ──────────────────────────────────────────────────
+
+    @app.get("/api/animations")
+    async def list_animations():
+        """Get all animation mode keyframe sequences (runtime transforms)."""
+        return get_all_animations()
+
+    class GenerateAnimVideoRequest(BaseModel):
+        head: str
+        mode: str = "idle"  # idle, listening, thinking
+        model: str = "google/veo-3.1-lite"
+
+    @app.post("/api/generate-anim-video")
+    async def generate_anim_video_endpoint(req: GenerateAnimVideoRequest):
+        """Generate animation video for a mode, extract frames. Async job."""
+        try:
+            anim_mode = AnimationMode(req.mode)
+        except ValueError:
+            raise HTTPException(400, f"Unknown mode: {req.mode}")
+
+        api_key = os.environ.get("OPENROUTER_API_KEY", "")
+        if not api_key:
+            raise HTTPException(500, "OPENROUTER_API_KEY not set")
+
+        head_dir = HEADS_DIR / req.head
+        if not head_dir.exists():
+            raise HTTPException(404, f"Head '{req.head}' not found")
+
+        job_id = _create_job(req.head, f"anim-{req.mode}")
+
+        def _run():
+            try:
+                generate_anim_video(
+                    name=req.head,
+                    mode=anim_mode,
+                    api_key=api_key,
+                    out_root=str(HEADS_DIR),
+                    model=req.model,
+                    on_progress=_job_progress(job_id),
+                )
+                jobs[job_id]["status"] = "done"
+            except Exception as e:
+                jobs[job_id]["status"] = "error"
+                jobs[job_id]["error"] = str(e)
+
+        threading.Thread(target=_run, daemon=True).start()
+
+        return {"job_id": job_id, "head": req.head, "mode": req.mode, "ok": True}
+
+    @app.get("/api/head/{name}/anim-frames")
+    async def get_anim_frames(name: str):
+        """Get extracted animation frame PNGs as base64 data URIs."""
+        head_dir = HEADS_DIR / name
+        anim_dir = head_dir / "anim"
+        if not anim_dir.exists():
+            return {"name": name, "frames": {}}
+
+        frames: dict[str, list[str]] = {}
+        for mode in AnimationMode:
+            import glob
+            pattern = str(anim_dir / f"{mode.value}_*.png")
+            paths = sorted(glob.glob(pattern))
+            if paths:
+                mode_frames = []
+                for p in paths:
+                    b64 = base64.b64encode(Path(p).read_bytes()).decode()
+                    mode_frames.append(f"data:image/png;base64,{b64}")
+                frames[mode.value] = mode_frames
+
+        return {"name": name, "frames": frames}
 
     # ── Head assets ────────────────────────────────────────────────────────
 
@@ -485,12 +596,42 @@ def create_app():
                 audio_bytes = audio_file.read_bytes()
                 words = deepgram_stt_words(audio_bytes, api_key)
                 words_file.write_text(json.dumps(words))
-                timeline = words_to_timeline(words)
-                timeline_file.write_text(json.dumps(timeline))
+
+                # Use wav2vec2 forced alignment if available, else CMU dict
+                alignment_method = "cmu"
+                if aligner_available():
+                    try:
+                        # Get PCM audio for alignment (no ffmpeg needed)
+                        pcm_bytes = deepgram_tts(req.text, api_key,
+                                                 encoding="linear16", sample_rate=16000)
+                        transcript = " ".join(w["word"] for w in words)
+                        aligned = align_audio(pcm_bytes, transcript)
+                        timeline = aligned_to_timeline(aligned)
+                        alignment_method = "wav2vec2"
+                    except Exception as align_err:
+                        import logging
+                        logging.getLogger("voxhelm").warning(
+                            "wav2vec2 alignment failed, falling back to CMU: %s", align_err)
+                        timeline = words_to_timeline(words)
+                else:
+                    timeline = words_to_timeline(words)
+
+                timeline_file.write_text(json.dumps({
+                    "events": timeline,
+                    "method": alignment_method,
+                }))
             except Exception as e:
                 raise HTTPException(500, f"STT failed: {e}")
 
-        timeline = json.loads(timeline_file.read_text())
+        timeline_data = json.loads(timeline_file.read_text())
+        # Support both old format (list) and new format (dict with method)
+        if isinstance(timeline_data, list):
+            timeline = timeline_data
+            alignment_method = "cmu"
+        else:
+            timeline = timeline_data.get("events", timeline_data)
+            alignment_method = timeline_data.get("method", "cmu")
+
         audio_b64 = base64.b64encode(audio_file.read_bytes()).decode()
 
         # Build debug breakdown if words are cached
@@ -507,6 +648,7 @@ def create_app():
             "text": req.text,
             "audio_b64": audio_b64,
             "timeline": timeline,
+            "alignment": alignment_method,
             "debug": debug,
         }
 

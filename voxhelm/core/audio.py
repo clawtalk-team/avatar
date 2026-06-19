@@ -10,30 +10,41 @@ import urllib.request
 log = logging.getLogger(__name__)
 
 
-def deepgram_tts(text: str, api_key: str | None = None) -> bytes:
-    """Generate speech audio (MP3) from text via Deepgram TTS.
+def deepgram_tts(
+    text: str,
+    api_key: str | None = None,
+    encoding: str = "mp3",
+    sample_rate: int = 16000,
+) -> bytes:
+    """Generate speech audio from text via Deepgram TTS.
 
     Args:
         text: Text to speak.
         api_key: Deepgram API key (defaults to DEEPGRAM_API_KEY env var).
+        encoding: Audio format — "mp3" (default, for browser playback) or
+                  "linear16" (PCM 16-bit, for wav2vec2 alignment).
+        sample_rate: Sample rate for linear16 output (default 16000 for wav2vec2).
 
     Returns:
-        MP3 audio bytes.
+        Audio bytes in the requested format.
     """
     key = api_key or os.environ.get("DEEPGRAM_API_KEY", "")
     if not key:
         raise RuntimeError("DEEPGRAM_API_KEY not set")
 
-    url = "https://api.deepgram.com/v1/speak?model=aura-2-thalia-en&encoding=mp3"
+    params = f"model=aura-2-thalia-en&encoding={encoding}"
+    if encoding == "linear16":
+        params += f"&sample_rate={sample_rate}"
+    url = f"https://api.deepgram.com/v1/speak?{params}"
     body = json.dumps({"text": text}).encode()
     req = urllib.request.Request(url, data=body, method="POST")
     req.add_header("Authorization", f"Token {key}")
     req.add_header("Content-Type", "application/json")
 
-    log.info("TTS: %s...", text[:60])
+    log.info("TTS (%s): %s...", encoding, text[:60])
     with urllib.request.urlopen(req, timeout=30) as resp:
         audio = resp.read()
-    log.info("TTS OK (%d bytes)", len(audio))
+    log.info("TTS OK (%d bytes, %s)", len(audio), encoding)
     return audio
 
 

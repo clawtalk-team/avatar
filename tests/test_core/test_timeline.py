@@ -19,12 +19,12 @@ def test_single_known_word():
     assert len(result) >= 3
 
 
-def test_unknown_word_fallback():
+def test_unknown_word_guessed():
     words = [{"word": "xyzzy", "start": 0.1, "end": 0.5}]
     result = words_to_timeline(words)
-    # Unknown word falls back to 'aa'
-    visemes = [e["v"] for e in result]
-    assert "aa" in visemes
+    # Unknown word gets guessed phonemes from spelling (not just 'aa')
+    non_sil = [e for e in result if e["v"] != "sil"]
+    assert len(non_sil) >= 1, "Should have at least one guessed viseme"
 
 
 def test_timeline_ordering():
@@ -79,8 +79,10 @@ def test_debug_unknown_word():
     debug = words_to_debug(words)
     assert len(debug) == 1
     assert debug[0]["in_cmu"] is False
-    assert debug[0]["visemes"] == ["aa"]
-    assert debug[0]["phonemes"] == []
+    assert debug[0].get("guessed") is True
+    # Should have guessed phonemes from spelling, not empty
+    assert len(debug[0]["phonemes"]) >= 1
+    assert len(debug[0]["visemes"]) >= 1
 
 
 def test_debug_viseme_variety():

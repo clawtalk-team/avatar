@@ -95,6 +95,106 @@ def cmu_lookup(word: str) -> list[str] | None:
     return entries[0]
 
 
+# ── Letter-to-phoneme heuristic for unknown words ───────────────────────────
+
+# Common English digraphs and their ARPAbet equivalents
+_DIGRAPHS: list[tuple[str, list[str]]] = [
+    ("th", ["TH"]),
+    ("sh", ["SH"]),
+    ("ch", ["CH"]),
+    ("ph", ["F"]),
+    ("wh", ["W"]),
+    ("ck", ["K"]),
+    ("ng", ["NG"]),
+    ("qu", ["K", "W"]),
+    ("oo", ["UW"]),
+    ("ee", ["IY"]),
+    ("ea", ["IY"]),
+    ("ou", ["AW"]),
+    ("ow", ["OW"]),
+    ("ai", ["EY"]),
+    ("ay", ["EY"]),
+    ("oi", ["OY"]),
+    ("oy", ["OY"]),
+    ("au", ["AO"]),
+    ("aw", ["AO"]),
+    ("igh", ["AY"]),
+]
+
+# Single letter fallbacks
+_LETTER_PHONEME: dict[str, str] = {
+    "a": "AE", "b": "B", "c": "K", "d": "D", "e": "EH",
+    "f": "F", "g": "G", "h": "HH", "i": "IH", "j": "JH",
+    "k": "K", "l": "L", "m": "M", "n": "N", "o": "AA",
+    "p": "P", "q": "K", "r": "R", "s": "S", "t": "T",
+    "u": "AH", "v": "V", "w": "W", "x": "K", "y": "IY",
+    "z": "Z",
+}
+
+# Common suffixes → phoneme sequences (strip before processing, append after)
+_SUFFIXES: list[tuple[str, list[str]]] = [
+    ("tion", ["SH", "AH", "N"]),
+    ("sion", ["ZH", "AH", "N"]),
+    ("ness", ["N", "AH", "S"]),
+    ("ment", ["M", "AH", "N", "T"]),
+    ("able", ["AH", "B", "AH", "L"]),
+    ("ible", ["AH", "B", "AH", "L"]),
+    ("ful", ["F", "AH", "L"]),
+    ("less", ["L", "AH", "S"]),
+    ("ing", ["IH", "NG"]),
+    ("ous", ["AH", "S"]),
+    ("ive", ["IH", "V"]),
+    ("ly", ["L", "IY"]),
+    ("ed", ["D"]),
+    ("er", ["ER"]),
+    ("es", ["Z"]),
+    ("'s", ["Z"]),
+]
+
+
+def guess_phonemes(word: str) -> list[str]:
+    """Guess ARPAbet phonemes from English spelling for unknown words.
+
+    Uses digraph matching, suffix stripping, and single-letter fallback.
+    Not perfect, but much better than mapping everything to 'aa'.
+    """
+    clean = re.sub(r"[^a-z']", "", word.lower())
+    if not clean:
+        return ["AH"]
+
+    # Check for common suffixes
+    suffix_phonemes: list[str] = []
+    for suffix, phonemes in _SUFFIXES:
+        if clean.endswith(suffix) and len(clean) > len(suffix) + 1:
+            clean = clean[: -len(suffix)]
+            suffix_phonemes = list(phonemes)
+            break
+
+    # Scan left to right, trying digraphs first then single letters
+    result: list[str] = []
+    i = 0
+    while i < len(clean):
+        matched = False
+        # Try trigraphs and digraphs (longest first)
+        for digraph, phonemes in _DIGRAPHS:
+            if clean[i:].startswith(digraph):
+                result.extend(phonemes)
+                i += len(digraph)
+                matched = True
+                break
+        if not matched:
+            ch = clean[i]
+            # Skip silent e at end
+            if ch == "e" and i == len(clean) - 1 and len(clean) > 2:
+                i += 1
+                continue
+            result.append(_LETTER_PHONEME.get(ch, "AH"))
+            i += 1
+
+    result.extend(suffix_phonemes)
+    return result if result else ["AH"]
+
+
 class _CMUProxy:
     """Dict-like proxy that loads the full CMU dict on first access."""
     def get(self, word, default=None):

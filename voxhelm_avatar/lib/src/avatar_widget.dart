@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import 'animation_mode_controller.dart';
 import 'blink_controller.dart';
 import 'viseme_controller.dart';
 import 'models/viseme_set.dart';
@@ -11,11 +12,16 @@ import 'models/viseme_set.dart';
 /// viseme from [controller], and optionally overlays an eye-blink animation
 /// driven by [blinkController].
 ///
+/// When an [animationController] is provided, the widget applies per-group
+/// SVG transforms (head tilt, eye movement, brow raises) for idle, listening,
+/// and thinking animation modes.
+///
 /// ```dart
 /// VoxhelmAvatar(
 ///   visemeSet: visemeSet,
 ///   controller: visemeController,
 ///   blinkController: blinkController,
+///   animationController: animModeController,
 ///   size: 200,
 /// )
 /// ```
@@ -28,6 +34,9 @@ class VoxhelmAvatar extends StatefulWidget {
 
   /// Optional controller for idle eye-blink animation.
   final BlinkController? blinkController;
+
+  /// Optional controller for animation mode transforms (idle/listening/thinking).
+  final AnimationModeController? animationController;
 
   /// Widget size (width and height).
   final double size;
@@ -61,6 +70,7 @@ class VoxhelmAvatar extends StatefulWidget {
     required this.visemeSet,
     required this.controller,
     this.blinkController,
+    this.animationController,
     this.size = 200,
     this.borderRadius,
     this.backgroundColor = const Color(0xFF1A1A1A),
@@ -77,15 +87,20 @@ class VoxhelmAvatar extends StatefulWidget {
 }
 
 class _VoxhelmAvatarState extends State<VoxhelmAvatar> {
-  /// Pre-parsed SVG widgets keyed by viseme name.
+  /// Pre-parsed SVG widgets keyed by viseme name (no animation transforms).
   final Map<String, Widget> _svgCache = {};
+
+  /// Cache key for the last rendered animated SVG to avoid re-parsing.
+  String? _lastAnimCacheKey;
+  Widget? _lastAnimWidget;
 
   @override
   void initState() {
     super.initState();
     _buildSvgCache();
-    widget.controller.addListener(_onVisemeChange);
-    widget.blinkController?.addListener(_onBlinkChange);
+    widget.controller.addListener(_onUpdate);
+    widget.blinkController?.addListener(_onUpdate);
+    widget.animationController?.addListener(_onUpdate);
   }
 
   @override
@@ -96,12 +111,16 @@ class _VoxhelmAvatarState extends State<VoxhelmAvatar> {
       _buildSvgCache();
     }
     if (old.controller != widget.controller) {
-      old.controller.removeListener(_onVisemeChange);
-      widget.controller.addListener(_onVisemeChange);
+      old.controller.removeListener(_onUpdate);
+      widget.controller.addListener(_onUpdate);
     }
     if (old.blinkController != widget.blinkController) {
-      old.blinkController?.removeListener(_onBlinkChange);
-      widget.blinkController?.addListener(_onBlinkChange);
+      old.blinkController?.removeListener(_onUpdate);
+      widget.blinkController?.addListener(_onUpdate);
+    }
+    if (old.animationController != widget.animationController) {
+      old.animationController?.removeListener(_onUpdate);
+      widget.animationController?.addListener(_onUpdate);
     }
   }
 
@@ -115,20 +134,100 @@ class _VoxhelmAvatarState extends State<VoxhelmAvatar> {
     }
   }
 
-  void _onVisemeChange() => setState(() {});
-  void _onBlinkChange() => setState(() {});
+  void _onUpdate() => setState(() {});
 
   @override
   void dispose() {
-    widget.controller.removeListener(_onVisemeChange);
-    widget.blinkController?.removeListener(_onBlinkChange);
+    widget.controller.removeListener(_onUpdate);
+    widget.blinkController?.removeListener(_onUpdate);
+    widget.animationController?.removeListener(_onUpdate);
     super.dispose();
+  }
+
+  /// Get the SVG widget, potentially with animation transforms injected.
+  Widget? _getSvgWidget(String viseme) {
+    final animCtrl = widget.animationController;
+
+    // Fast path: no animation controller or speaking mode — use cached widget
+    if (animCtrl == null ||
+        animCtrl.mode == AnimationMode.speaking ||
+        !animCtrl.isRunning) {
+      return _svgCache[viseme] ?? _svgCache['sil'];
+    }
+
+    // Apply transforms by modifying the SVG string.
+    // Quantize transform values to reduce re-parses (~10 updates/sec instead of 60).
+    final transforms = animCtrl.transforms;
+    final cacheKey = '$viseme|${transforms.entries.map((e) =>
+        '${e.key}:${(e.value.tx * 2).round()},${(e.value.ty * 2).round()},'
+        '${(e.value.r * 2).round()},${(e.value.sx * 100).round()},'
+        '${(e.value.sy * 100).round()}').join('|')}';
+
+    if (cacheKey == _lastAnimCacheKey && _lastAnimWidget != null) {
+      return _lastAnimWidget;
+    }
+
+    final svgString = widget.visemeSet.svgs[viseme] ??
+        widget.visemeSet.svgs['sil'];
+    if (svgString == null) return null;
+
+    final transformed = _injectTransforms(svgString, transforms);
+    _lastAnimCacheKey = cacheKey;
+    _lastAnimWidget = SvgPicture.string(
+      transformed,
+      width: widget.size,
+      height: widget.size,
+    );
+    return _lastAnimWidget;
+  }
+
+  /// Inject transform attributes into SVG group tags.
+  static String _injectTransforms(
+    String svg,
+    Map<String, GroupTransform> transforms,
+  ) {
+    var result = svg;
+    for (final entry in transforms.entries) {
+      final gid = entry.key;
+      final t = entry.value;
+
+      // Skip neutral transforms
+      if (t == GroupTransform.neutral) continue;
+
+      // Match <g id="head" ...> and inject/replace transform attribute
+      final pattern = RegExp(
+        r'''(<g\s+(?=[^>]*id\s*=\s*['"]''' +
+            RegExp.escape(gid) +
+            r'''['"])[^>]*?)(\s*/?>)''',
+      );
+
+      result = result.replaceFirstMapped(pattern, (match) {
+        var tag = match.group(1)!;
+        final close = match.group(2)!;
+
+        // Remove existing transform attribute
+        tag = tag.replaceAll(
+          RegExp(r'''\s+transform\s*=\s*['"][^'"]*['"]'''),
+          '',
+        );
+
+        // Build transform string
+        // rotate around center of 512x512 viewBox
+        final transform =
+            'translate(${t.tx.toStringAsFixed(2)} ${t.ty.toStringAsFixed(2)}) '
+            'rotate(${t.r.toStringAsFixed(2)} 256 256) '
+            'scale(${t.sx.toStringAsFixed(4)} ${t.sy.toStringAsFixed(4)})';
+
+        return '$tag transform="$transform"$close';
+      });
+    }
+    return result;
   }
 
   @override
   Widget build(BuildContext context) {
     final viseme = widget.controller.currentViseme;
-    final svgWidget = _svgCache[viseme] ?? _svgCache['sil'];
+    final svgWidget = _getSvgWidget(viseme);
 
     Widget child = Stack(
       children: [
