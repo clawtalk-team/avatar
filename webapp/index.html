@@ -107,6 +107,12 @@
   .debug-table td{padding:4px 6px;color:#888;border-bottom:1px solid #1a1a1a}
   .debug-table .miss{color:#f66}
   .debug-table .vis{color:#4c9;font-weight:600}
+
+  /* ── Animation mode toggle ── */
+  .mode-bar{display:flex;gap:6px;justify-content:center;margin-bottom:12px}
+  .anim-btn{background:#181818;color:#666;border:1px solid #252525;padding:7px 16px;border-radius:6px;font-size:12px;cursor:pointer;text-transform:capitalize;transition:all .12s}
+  .anim-btn:hover{background:#1e1e1e;border-color:#333;color:#bbb}
+  .anim-btn.active{background:#1a2a1a;border-color:#2a6;color:#4c9}
 </style>
 </head>
 <body>
@@ -178,6 +184,12 @@
       <h2 style="color:#fff;font-size:18px">Review Base Frame</h2>
       <p style="color:#666;font-size:13px">Check the character looks right before generating all 15 visemes.</p>
       <div class="review-frame" id="review-frame"></div>
+      <div class="mode-bar" id="review-mode-bar">
+        <button class="anim-btn active" data-anim="idle" onclick="setAnimMode('idle',this)">idle</button>
+        <button class="anim-btn" data-anim="listening" onclick="setAnimMode('listening',this)">listening</button>
+        <button class="anim-btn" data-anim="thinking" onclick="setAnimMode('thinking',this)">thinking</button>
+      </div>
+      <p style="color:#444;font-size:11px;margin-top:-8px">Preview animation modes on the base frame</p>
       <div class="review-actions">
         <button class="btn-secondary" onclick="goToStep(1)">← Regenerate</button>
         <button class="btn-primary" id="approve-btn" onclick="doGenerateVisemes()">Approve & Generate Visemes</button>
@@ -204,6 +216,14 @@
           <ellipse id="lid-r" cx="302" cy="240" rx="30" ry="0" fill="#F5C4A1" stroke="#3D2B1F" stroke-width="2"/>
         </svg>
       </div>
+      <div class="mode-bar" id="mode-bar">
+        <button class="anim-btn active" data-anim="idle" onclick="setAnimMode('idle',this)">idle</button>
+        <button class="anim-btn" data-anim="listening" onclick="setAnimMode('listening',this)">listening</button>
+        <button class="anim-btn" data-anim="thinking" onclick="setAnimMode('thinking',this)">thinking</button>
+        <button class="anim-btn" data-anim="speaking" onclick="setAnimMode('speaking',this)">speaking</button>
+        <button class="btn-secondary" id="gen-anim-btn" onclick="doGenerateAnimVideo()" style="margin-left:8px;font-size:11px;padding:5px 12px">Generate Video</button>
+      </div>
+      <div class="status" id="anim-status" style="font-size:11px;min-height:14px"></div>
       <div class="vis-label" id="vis-label">sil</div>
       <div class="sentence-list" id="sentence-list"></div>
       <div class="custom-row">
@@ -335,6 +355,10 @@ function goToStep(n) {
   // Ensure stage is populated when entering speak demo
   if (n === 4 && currentHead && Object.keys(headAssets).length > 0) {
     setupStage();
+  }
+  // Start animation loop when entering review or speak demo
+  if ((n === 2 || n === 4) && currentAnimMode !== 'speaking') {
+    startAnimLoop();
   }
 }
 
@@ -483,6 +507,7 @@ async function loadHeadAssets(name) {
   headExtras = data.extras || {};
   headMode = data.mode || 'svg';
   document.getElementById('gallery-title').textContent = `${name.replace(/_/g, ' ')} — ${Object.keys(headAssets).length}/15 visemes`;
+  await loadAnimFrames(name);
 }
 
 // ── Step 3: Gallery ──────────────────────────────────────────────────────────
@@ -546,10 +571,33 @@ function setupStage() {
 
   showViseme('sil');
   buildChipRow();
+  _setupAnimFrameImages();
+}
+
+// Set up <img> elements for video-extracted animation frames
+function _setupAnimFrameImages() {
+  const stage = document.getElementById('stage');
+  if (!stage) return;
+  // Remove old anim frame images
+  stage.querySelectorAll('[data-anim-frame]').forEach(e => e.remove());
+
+  const blinkOverlay = document.getElementById('blink-overlay');
+  for (const [mode, urls] of Object.entries(animFrameData)) {
+    urls.forEach((url, i) => {
+      const img = document.createElement('img');
+      img.src = url;
+      img.dataset.animFrame = `${mode}_${i}`;
+      img.dataset.animMode = mode;
+      img.style.cssText = 'width:100%;height:100%;position:absolute;top:0;left:0;display:none;object-fit:cover';
+      stage.insertBefore(img, blinkOverlay);
+    });
+  }
 }
 
 function showViseme(v) {
   if (!headAssets[v]) v = 'sil';
+  // Hide any animation frames when showing a viseme
+  document.querySelectorAll('#stage [data-anim-frame]').forEach(el => el.style.display = 'none');
   document.querySelectorAll('#stage [data-viseme]').forEach(el => {
     el.style.display = el.dataset.viseme === v ? 'block' : 'none';
   });
@@ -711,7 +759,7 @@ function setStatus(id, msg, cls='') {
   el.className = 'status ' + cls;
 }
 
-// ── Idle animations (blink + eyebrow raise) ─────────────────────────────────
+// ── Blink animations ────────────────────────────────────────────────────────
 const lidL = document.getElementById('lid-l');
 const lidR = document.getElementById('lid-r');
 
@@ -766,8 +814,275 @@ function startIdleAnimations() {
   setTimeout(scheduleBrows, 3000+Math.random()*3000);
 }
 
+// ── Animation mode controller ───────────────────────────────────────────────
+let animationData = {};       // loaded from /api/animations (runtime transforms)
+let animFrameData = {};       // loaded from /api/head/{name}/anim-frames (video frames)
+let currentAnimMode = 'idle';
+let animLoopRafId = null;
+let animStartTime = 0;
+
+async function loadAnimations() {
+  try {
+    const res = await fetch('/api/animations');
+    animationData = await res.json();
+  } catch(e) {
+    console.warn('Failed to load animations:', e);
+  }
+}
+
+async function loadAnimFrames(name) {
+  try {
+    const res = await fetch(`/api/head/${name}/anim-frames`);
+    const data = await res.json();
+    animFrameData = data.frames || {};
+    // Preload images
+    for (const urls of Object.values(animFrameData)) {
+      for (const url of urls) {
+        const img = new Image();
+        img.src = url;
+      }
+    }
+    _updateGenButton();
+  } catch(e) {
+    animFrameData = {};
+  }
+}
+
+function _updateGenButton() {
+  const btn = document.getElementById('gen-anim-btn');
+  if (!btn) return;
+  const hasFrames = animFrameData[currentAnimMode]?.length > 0;
+  btn.textContent = hasFrames ? 'Regenerate Video' : 'Generate Video';
+}
+
+async function doGenerateAnimVideo() {
+  if (!currentHead) { setStatus('anim-status', 'Load a head first', 'err'); return; }
+  if (currentAnimMode === 'speaking') { setStatus('anim-status', 'Select idle, listening, or thinking', 'err'); return; }
+
+  const btn = document.getElementById('gen-anim-btn');
+  btn.disabled = true;
+  setStatus('anim-status', `Generating ${currentAnimMode} video… (1-2 min)`, 'running');
+
+  try {
+    const res = await fetch('/api/generate-anim-video', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ head: currentHead, mode: currentAnimMode }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Generation failed');
+
+    await streamJobProgress(data.job_id, 'anim-status');
+    await loadAnimFrames(currentHead);
+    _setupAnimFrameImages();
+    startAnimLoop();
+    setStatus('anim-status', `${currentAnimMode} video ready!`, 'ok');
+  } catch(e) {
+    setStatus('anim-status', e.message, 'err');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function setAnimMode(mode, el) {
+  currentAnimMode = mode;
+  // Sync all mode bars (review + speak demo)
+  document.querySelectorAll('.anim-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.anim === mode);
+  });
+
+  _updateGenButton();
+
+  // Reset transforms when switching to speaking mode
+  if (mode === 'speaking') {
+    stopAnimLoop();
+    _hideAnimFrames();
+    resetTransforms();
+    showViseme('sil');
+  } else {
+    startAnimLoop();
+  }
+}
+
+function startAnimLoop() {
+  stopAnimLoop();
+  animStartTime = performance.now();
+  animLoopRafId = requestAnimationFrame(animLoopTick);
+}
+
+function stopAnimLoop() {
+  if (animLoopRafId) {
+    cancelAnimationFrame(animLoopRafId);
+    animLoopRafId = null;
+  }
+}
+
+function _applyTransformsToContainer(container, groups, prev, nxt, localT) {
+  for (const gid of groups) {
+    const a = prev.groups[gid] || {tx:0,ty:0,r:0,sx:1,sy:1};
+    const b = nxt.groups[gid] || {tx:0,ty:0,r:0,sx:1,sy:1};
+
+    const tx = a.tx + (b.tx - a.tx) * localT;
+    const ty = a.ty + (b.ty - a.ty) * localT;
+    const r  = a.r  + (b.r  - a.r)  * localT;
+    const sx = a.sx + (b.sx - a.sx) * localT;
+    const sy = a.sy + (b.sy - a.sy) * localT;
+
+    container.querySelectorAll(`g#${gid}`).forEach(g => {
+      g.setAttribute('transform',
+        `translate(${tx} ${ty}) rotate(${r} 256 256) scale(${sx} ${sy})`);
+    });
+  }
+}
+
+// For photo mode: combine all group transforms into one CSS transform on the
+// whole image. We sum head + eyes contributions (head drives the bulk, eyes
+// add a slight offset). The values in 512-space are scaled to % of container.
+function _applyPhotoTransform(container, prev, nxt, localT) {
+  const target = container.querySelector('img[data-viseme]:not([style*="display: none"]):not([style*="display:none"])') ||
+                 container.querySelector('img[data-viseme]') ||
+                 container.querySelector('img');
+  if (!target) return;
+
+  // Interpolate the 'head' group (dominant motion)
+  const ha = (prev.groups || {}).head || {tx:0,ty:0,r:0,sx:1,sy:1};
+  const hb = (nxt.groups || {}).head || {tx:0,ty:0,r:0,sx:1,sy:1};
+  const tx = ha.tx + (hb.tx - ha.tx) * localT;
+  const ty = ha.ty + (hb.ty - ha.ty) * localT;
+  const r  = ha.r  + (hb.r  - ha.r)  * localT;
+  const sx = ha.sx + (hb.sx - ha.sx) * localT;
+  const sy = ha.sy + (hb.sy - ha.sy) * localT;
+
+  // Scale from 512-space to percentage (~0.2% per SVG pixel)
+  const pxScale = 100 / 512;
+  target.style.transform =
+    `translate(${tx * pxScale}%, ${ty * pxScale}%) ` +
+    `rotate(${r}deg) ` +
+    `scale(${sx}, ${sy})`;
+  target.style.transformOrigin = 'center center';
+}
+
+// Show a specific animation frame image, hide everything else
+function _showAnimFrameByIndex(mode, index) {
+  const stage = document.getElementById('stage');
+  if (!stage) return;
+  // Hide all viseme frames
+  stage.querySelectorAll('[data-viseme]').forEach(el => el.style.display = 'none');
+  // Hide blink overlay — video frames have their own blinks baked in
+  const blinkOverlay = document.getElementById('blink-overlay');
+  if (blinkOverlay) blinkOverlay.style.display = 'none';
+  // Hide all anim frames, show only the target
+  stage.querySelectorAll('[data-anim-frame]').forEach(el => {
+    el.style.display = (el.dataset.animMode === mode && el.dataset.animFrame === `${mode}_${index}`)
+      ? 'block' : 'none';
+  });
+}
+
+function _hideAnimFrames() {
+  document.querySelectorAll('#stage [data-anim-frame]').forEach(el => el.style.display = 'none');
+  // Re-show blink overlay when returning to viseme/transform mode
+  const blinkOverlay = document.getElementById('blink-overlay');
+  if (blinkOverlay && headMode === 'svg') blinkOverlay.style.display = 'block';
+}
+
+function animLoopTick(now) {
+  const videoFrames = animFrameData[currentAnimMode];
+  const hasVideoFrames = videoFrames && videoFrames.length > 1;
+
+  if (hasVideoFrames) {
+    // Video frame playback — cycle through extracted PNGs
+    const numFrames = videoFrames.length;
+    const durationMs = animationData[currentAnimMode]?.duration_ms || 4000;
+    const frameDuration = durationMs / numFrames;
+    const elapsed = now - animStartTime;
+    const frameIndex = Math.floor((elapsed / frameDuration) % numFrames);
+    _showAnimFrameByIndex(currentAnimMode, frameIndex);
+    animLoopRafId = requestAnimationFrame(animLoopTick);
+    return;
+  }
+
+  // Fallback: runtime transform-based animation
+  // Make sure viseme frame is showing
+  _hideAnimFrames();
+
+  const seq = animationData[currentAnimMode];
+  if (!seq || !seq.keyframes) {
+    animLoopRafId = requestAnimationFrame(animLoopTick);
+    return;
+  }
+
+  const elapsed = now - animStartTime;
+  const tNorm = (elapsed % seq.duration_ms) / seq.duration_ms;
+
+  // Find bracketing keyframes
+  const kfs = seq.keyframes;
+  let prev = kfs[0], nxt = kfs[kfs.length - 1];
+  for (let i = 0; i < kfs.length - 1; i++) {
+    if (tNorm >= kfs[i].t && tNorm <= kfs[i + 1].t) {
+      prev = kfs[i];
+      nxt = kfs[i + 1];
+      break;
+    }
+  }
+
+  // Smooth interpolation
+  const span = nxt.t - prev.t;
+  let localT = span > 0 ? (tNorm - prev.t) / span : 0;
+  localT = localT * localT * (3 - 2 * localT); // smoothstep
+
+  const groups = new Set([
+    ...Object.keys(prev.groups || {}),
+    ...Object.keys(nxt.groups || {}),
+  ]);
+
+  const containers = ['stage', 'review-frame'];
+  for (const id of containers) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+    if (headMode === 'svg') {
+      _applyTransformsToContainer(el, groups, prev, nxt, localT);
+    } else {
+      _applyPhotoTransform(el, prev, nxt, localT);
+    }
+  }
+
+  animLoopRafId = requestAnimationFrame(animLoopTick);
+}
+
+function resetTransforms() {
+  for (const containerId of ['stage', 'review-frame']) {
+    const el = document.getElementById(containerId);
+    if (!el) continue;
+    // SVG groups
+    for (const gid of ['head','eyes','brows','mouth']) {
+      el.querySelectorAll(`g#${gid}`).forEach(g => {
+        g.removeAttribute('transform');
+      });
+    }
+    // Photo images — only reset non-anim-frame images
+    el.querySelectorAll('img:not([data-anim-frame])').forEach(img => {
+      img.style.transform = '';
+      img.style.transformOrigin = '';
+    });
+  }
+}
+
+// Override playDemo to switch to speaking mode during playback
+const _origPlayDemo = playDemo;
+playDemo = async function() {
+  setAnimMode('speaking', document.querySelector('.anim-btn[data-anim="speaking"]'));
+  await _origPlayDemo();
+  // Return to idle when done
+  setTimeout(() => {
+    setAnimMode('idle', document.querySelector('.anim-btn[data-anim="idle"]'));
+  }, currentAudioDuration * 1000 / speed + 100);
+};
+
 // ── Boot ─────────────────────────────────────────────────────────────────────
-init();
+loadAnimations().then(() => {
+  init();
+  // Start idle animation loop after init
+  setTimeout(() => startAnimLoop(), 500);
+});
 </script>
 </body>
 </html>
