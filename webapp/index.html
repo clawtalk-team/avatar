@@ -202,6 +202,10 @@
   <div class="pane" id="pane-3">
     <h2 style="color:#fff;font-size:18px;margin-bottom:16px" id="gallery-title">Viseme Gallery</h2>
     <div class="viseme-grid" id="viseme-grid"></div>
+    <div id="anim-preview-section" style="display:none;margin-top:24px">
+      <h3 style="color:#ddd;font-size:15px;margin-bottom:12px;border-top:1px solid #222;padding-top:16px">Animation Modes</h3>
+      <div style="display:flex;gap:16px;flex-wrap:wrap" id="anim-preview-grid"></div>
+    </div>
     <div style="margin-top:20px">
       <button class="btn-primary" onclick="goToStep(4)">Try Speak Demo →</button>
     </div>
@@ -299,23 +303,29 @@ async function loadPresets() {
   }
 }
 
+let headsData = {}; // cache head metadata by name
+
 async function loadHeads() {
   const res = await fetch('/api/heads');
   const heads = await res.json();
   const list = document.getElementById('head-list');
   list.innerHTML = '';
+  headsData = {};
   if (heads.length === 0) {
     list.innerHTML = '<p style="color:#333;font-size:12px;padding:4px">No heads yet</p>';
     return;
   }
   for (const h of heads) {
+    headsData[h.name] = h;
+    const animCount = h.animations?.length || 0;
+    const animLabel = animCount > 0 ? ` · ${animCount} anim` : '';
     const card = document.createElement('div');
     card.className = 'head-card' + (currentHead === h.name ? ' active' : '');
     card.onclick = (e) => { if (!e.target.classList.contains('head-delete')) selectHead(h.name); };
     card.innerHTML = `
       <div>
         <div class="head-name">${h.name.replace(/_/g, ' ')}</div>
-        <div class="head-meta">${h.visemes} visemes ${h.complete ? '✓' : ''}</div>
+        <div class="head-meta">${h.visemes} visemes ${h.complete ? '✓' : ''}${animLabel}</div>
       </div>
       <span class="head-badge ${h.mode}">${h.mode}</span>
       <span class="head-delete" title="Delete" onclick="deleteHead('${h.name}', event)">✕</span>`;
@@ -489,6 +499,7 @@ function streamJobProgress(jobId, statusId) {
 // ── Head selection (from sidebar) ────────────────────────────────────────────
 async function selectHead(name) {
   currentHead = name;
+  headAnimations = headsData[name]?.animations || [];
   document.querySelectorAll('.head-card').forEach(c => c.classList.remove('active'));
   document.querySelectorAll('.head-card').forEach(c => {
     if (c.querySelector('.head-name')?.textContent === name.replace(/_/g, ' '))
@@ -511,6 +522,8 @@ async function loadHeadAssets(name) {
 }
 
 // ── Step 3: Gallery ──────────────────────────────────────────────────────────
+let headAnimations = []; // animation modes available for current head
+
 function renderGallery() {
   const grid = document.getElementById('viseme-grid');
   grid.innerHTML = '';
@@ -526,6 +539,27 @@ function renderGallery() {
       card.innerHTML = `<img src="${asset.data}" alt="${v}"/><div class="viseme-label">${v}</div>`;
     }
     grid.appendChild(card);
+  }
+
+  // Render animation previews
+  const animSection = document.getElementById('anim-preview-section');
+  const animGrid = document.getElementById('anim-preview-grid');
+  animGrid.innerHTML = '';
+  if (headAnimations.length > 0 && currentHead) {
+    animSection.style.display = 'block';
+    for (const mode of headAnimations) {
+      const card = document.createElement('div');
+      card.style.cssText = 'background:#1a1a1a;border-radius:12px;padding:12px;text-align:center;width:200px';
+      card.innerHTML = `
+        <div style="font-size:13px;font-weight:700;color:#7cf;margin-bottom:8px;text-transform:capitalize">${mode}</div>
+        <video autoplay loop muted playsinline
+          src="/heads/${currentHead}/anim/${mode}.mp4"
+          style="width:180px;height:180px;border-radius:8px;object-fit:cover;background:#000">
+        </video>`;
+      animGrid.appendChild(card);
+    }
+  } else {
+    animSection.style.display = 'none';
   }
 }
 

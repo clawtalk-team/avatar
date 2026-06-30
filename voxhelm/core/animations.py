@@ -337,35 +337,52 @@ def sample_animation(
 # ── Video-based animation generation ─────────────────────────────────────
 
 # Prompts per mode — derived from behavioural research.
-ANIM_PROMPTS: dict[AnimationMode, str] = {
+# Use {bg} placeholder — replaced at generation time with the correct
+# background description for the head mode (dark for SVG, gray for photo).
+_ANIM_PROMPT_TEMPLATES: dict[AnimationMode, str] = {
     AnimationMode.IDLE: (
-        "Animate this cartoon character sitting idle and slightly bored. "
+        "Animate this character sitting idle and slightly bored. "
         "The head slowly droops and lolls to one side, eyelids become heavy "
         "and half-closed. The gaze drifts lazily around — looking off to the "
         "right, then slowly wandering down and to the left. A slow blink. "
         "The head straightens slightly then droops to the other side. Languid, "
         "low-energy movement. The character sighs — shoulders drop slightly. "
-        "Visible head movement tilting side to side. Dark background. No talking."
+        "Visible head movement tilting side to side. {bg}. No talking."
     ),
     AnimationMode.LISTENING: (
-        "Animate this cartoon character actively listening to someone speaking. "
+        "Animate this character actively listening to someone speaking. "
         "The head tilts to one side attentively, eyes wide and focused. The "
         "character nods — a clear downward head dip then back up. The head then "
         "cocks to the other side with interest. Another small nod of "
         "acknowledgement. Eyebrows raise briefly at something interesting. The "
         "head turns slightly toward the speaker. Alert, engaged, responsive "
-        "movements. Visible head tilting and nodding throughout. Dark background. "
+        "movements. Visible head tilting and nodding throughout. {bg}. "
         "No talking."
     ),
     AnimationMode.THINKING: (
-        "Animate this cartoon character thinking hard about a problem. The head "
+        "Animate this character thinking hard about a problem. The head "
         "tilts to the right while eyes look upward and to the right — accessing "
         "a memory. The brow furrows in concentration. The head slowly turns to "
         "look up and to the left, considering alternatives. Eyes briefly close "
         "in deep thought, then open wide with a flash of insight — eyebrows "
         "shoot up. The head returns toward centre. Clear visible head movement "
-        "— turning, tilting, nodding slightly. Dark background. No talking."
+        "— turning, tilting, nodding slightly. {bg}. No talking."
     ),
+}
+
+_BG_SVG = "Dark background"
+_BG_PHOTO = "Keep the plain light-gray studio background exactly as shown"
+
+
+def get_anim_prompt(mode: AnimationMode, is_photo: bool = False) -> str:
+    """Get the animation prompt for a mode, with background matched to head type."""
+    bg = _BG_PHOTO if is_photo else _BG_SVG
+    return _ANIM_PROMPT_TEMPLATES[mode].format(bg=bg)
+
+
+# Legacy alias for backward compatibility
+ANIM_PROMPTS: dict[AnimationMode, str] = {
+    m: t.format(bg=_BG_SVG) for m, t in _ANIM_PROMPT_TEMPLATES.items()
 }
 
 # Modes where the last_frame constraint is used for looping.
@@ -394,6 +411,7 @@ def submit_anim_video(
     model: str = DEFAULT_VIDEO_MODEL,
     duration: int = DEFAULT_VIDEO_DURATION,
     resolution: str = DEFAULT_VIDEO_RESOLUTION,
+    is_photo: bool = False,
 ) -> dict:
     """Submit an animation video generation job to OpenRouter.
 
@@ -407,7 +425,7 @@ def submit_anim_video(
         b64 = base64.b64encode(f.read()).decode()
     data_url = f"data:image/png;base64,{b64}"
 
-    prompt = ANIM_PROMPTS[mode]
+    prompt = get_anim_prompt(mode, is_photo=is_photo)
     use_last_frame = mode in _LOOP_MODES
 
     frame_images = [
@@ -560,6 +578,8 @@ def generate_anim_video(
         if not sil_png.exists():
             raise FileNotFoundError(f"No sil.svg or sil.png in {head_dir}")
 
+    is_photo = not sil_svg.exists()
+
     # 1. Render SVG to PNG (or use existing PNG)
     if on_progress:
         on_progress(f"{mode.value}_render", 0, 4, "generating")
@@ -571,7 +591,7 @@ def generate_anim_video(
         # Photo mode — sil.png already exists
         neutral_png = str(sil_png)
 
-    log.info("Neutral PNG ready: %s", neutral_png)
+    log.info("Neutral PNG ready: %s (photo=%s)", neutral_png, is_photo)
     if on_progress:
         on_progress(f"{mode.value}_render", 1, 4, "ok")
 
@@ -579,7 +599,7 @@ def generate_anim_video(
     if on_progress:
         on_progress(f"{mode.value}_submit", 1, 4, "generating")
 
-    job = submit_anim_video(neutral_png, mode, api_key, model=model)
+    job = submit_anim_video(neutral_png, mode, api_key, model=model, is_photo=is_photo)
     job_id = job["id"]
     log.info("Video job submitted: %s", job_id)
     if on_progress:
@@ -612,7 +632,9 @@ def generate_anim_video(
     else:
         raise TimeoutError(f"Video job {job_id} did not complete in 300s")
 
-    log.info("Video completed: cost=%s", result.get("usage", {}).get("cost"))
+    usage = result.get("usage", {})
+    video_cost = usage.get("cost") or usage.get("total_cost") or 0
+    log.info("Video completed: cost=$%.4f", float(video_cost) if video_cost else 0)
     if on_progress:
         on_progress(f"{mode.value}_video_done", 3, 4, "ok")
 
@@ -631,4 +653,4 @@ def generate_anim_video(
     if on_progress:
         on_progress(f"{mode.value}_frames", 4, 4, "ok")
 
-    return frames
+    return {"frames": frames, "cost": float(video_cost) if video_cost else 0}

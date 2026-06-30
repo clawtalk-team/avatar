@@ -8,11 +8,16 @@ with audio-synced viseme playback.
 
 - **Two rendering modes:** SVG cartoon (via Claude) and photorealistic PNG (via Gemini Flash Image)
 - **15 OVR visemes** per character with identity-locked generation
-- **Audio-driven animation** via Deepgram TTS/STT + phoneme-to-viseme mapping
-- **Split workflow:** generate base → review → generate visemes
+- **14 bundled presets** — people, robots, and fantasy characters
+- **Animation modes** — idle, listening, thinking videos via Veo 3.1 Lite
+- **Audio-driven lip-sync** via Deepgram TTS/STT + phoneme-to-viseme mapping
+- **Split workflow:** generate base → review → generate visemes → animations
+- **Proof page** — self-contained HTML with viseme grid, animation previews, and costs
+- **CDN delivery** — assets served from `avatars.voxhelm.com` via CloudFront
 - **Web studio** for generation, preview, and playback
 - **API-ready** FastAPI server with REST endpoints
 - **Flutter widget** for mobile/desktop integration (`voxhelm_avatar` package)
+- **Export command** — package heads into Flutter apps with auto pubspec registration
 
 ---
 
@@ -66,8 +71,11 @@ The recommended workflow is:
 1. generate-base    →  create reference frame (sil)
 2. validate         →  review in web viewer
 3. generate-visemes →  generate remaining 14 frames
-4. speak            →  create audio-driven demo
+4. generate-anims   →  generate idle/listening/thinking videos (~$0.20 each)
+5. speak            →  create audio-driven demo
 ```
+
+Or use `generate` for a one-shot pipeline (steps 1-4 + proof page).
 
 ### Quick start
 
@@ -138,8 +146,8 @@ voxhelm generate-visemes --head photo_woman --no-blink
 
 ### `voxhelm generate`
 
-One-shot: generate all 15 viseme assets (base + visemes). For QA control, use
-`generate-base` + `generate-visemes` instead.
+Full pipeline: base + visemes + animation videos + proof page. Generates all
+assets in one shot and opens the proof page when done.
 
 ```
 Options:
@@ -158,6 +166,45 @@ Options:
 ```bash
 voxhelm generate --preset young_woman
 voxhelm generate --mode photo --prompt "woman in her 30s, dark hair" --name photo_woman
+voxhelm generate --list-presets    # show all 14 presets
+```
+
+### `voxhelm generate-anims`
+
+Generate animation videos (idle/listening/thinking) for an existing head.
+Each mode costs ~$0.20 via Veo 3.1 Lite on OpenRouter.
+
+```
+Options:
+  --head TEXT         Head name  [required]
+  --modes TEXT        Comma-separated modes  [default: idle,listening,thinking]
+  --out TEXT          Root output directory  [default: outputs/heads]
+  --skip-existing     Skip modes that already have MP4s
+  -v, --verbose
+```
+
+```bash
+voxhelm generate-anims --head young_woman
+voxhelm generate-anims --head young_woman --modes listening,thinking
+voxhelm generate-anims --head young_woman --skip-existing
+```
+
+### `voxhelm export`
+
+Package a generated head into a Flutter app's assets directory and register
+it in `pubspec.yaml`.
+
+```
+Options:
+  --head TEXT         Head name  [required]
+  --target TEXT       Flutter app directory  [default: ../flutter-app]
+  --out TEXT          Root output directory  [default: outputs/heads]
+  -v, --verbose
+```
+
+```bash
+voxhelm export --head young_woman
+voxhelm export --head chrome_bot --target /path/to/flutter-app
 ```
 
 ### `voxhelm speak`
@@ -222,12 +269,15 @@ voxhelm serve --port 7432
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/api/presets` | List character presets |
-| `GET` | `/api/heads` | List all generated heads with metadata |
+| `GET` | `/api/heads` | List all generated heads with metadata + animations |
 | `POST` | `/api/generate-base` | Step 1: generate base frame |
-| `POST` | `/api/generate-visemes` | Step 2: generate visemes from approved base |
-| `POST` | `/api/generate` | One-shot: base + all visemes |
+| `POST` | `/api/generate-visemes` | Step 2: generate visemes (+ auto animations) |
+| `POST` | `/api/generate` | One-shot: base + all visemes + animations |
+| `POST` | `/api/generate-anim-video` | Generate animation video for a mode |
 | `GET` | `/api/head/{name}/assets` | Get all viseme assets (SVG/PNG) |
+| `GET` | `/api/head/{name}/anim-frames` | Get animation frames as base64 |
 | `GET` | `/api/head/{name}/validate` | Get validation gallery HTML |
+| `GET` | `/heads/{name}/{file}` | Serve raw files (PNG/SVG/MP4) |
 | `POST` | `/api/speak` | TTS audio + viseme timeline |
 
 Request bodies use `prompt` (or `preset`) + `mode` (`svg`/`photo`), matching the CLI.
@@ -264,17 +314,56 @@ photo_base(style="woman, 30s, dark hair", name="photo_test")
 | `young_woman` | Young woman, mid-20s, long auburn hair, freckled skin |
 | `middle_woman` | Middle-aged woman, 40s, dark hair with grey streaks |
 | `older_woman` | Elderly woman, 70s, silver bun, rosy cheeks |
+| `photo_man` | Photorealistic man, late 30s, short brown hair |
+| `photo_woman` | Photorealistic woman, early 30s, blonde hair |
+| `chrome_bot` | Retro robot, chrome head, glowing blue eyes |
+| `bolt_bot` | Pastel-mint robot, heart-shaped LED eyes |
+| `mossling` | Forest sprite, leafy green face, amber eyes |
+| `clayton` | Clay golem, terracotta head, chunky features |
+| `nimbus` | Cloud genie, fluffy blue head, wispy top |
+| `clawford` | Cartoon lobster, red-orange shell, cartoon eyes |
+| `friendly_robot` | Friendly robot, silver-grey head, glowing teal eyes |
+
+---
+
+## CDN Assets
+
+All 14 preset heads are published to `avatars.voxhelm.com` via S3 + CloudFront.
+
+```
+https://avatars.voxhelm.com/heads/manifest.json          — catalogue
+https://avatars.voxhelm.com/heads/{name}/sil.png          — silent frame
+https://avatars.voxhelm.com/heads/{name}/{viseme}.png     — viseme frame
+https://avatars.voxhelm.com/index.html                    — visual index
+```
+
+### Publishing
+
+```bash
+./scripts/publish-avatars.sh                    # publish all heads
+./scripts/publish-avatars.sh friendly_robot     # publish specific head
+./scripts/publish-avatars.sh --dry-run          # preview
+```
 
 ---
 
 ## Flutter package
 
-The `voxhelm_avatar` Flutter package provides a drop-in widget:
+The `voxhelm_avatar` Flutter package provides a drop-in widget supporting
+both SVG and PNG modes:
 
 ```dart
 import 'package:voxhelm_avatar/voxhelm_avatar.dart';
 
-final visemeSet = await VisemeSet.fromAssetBundle(context, 'assets/heads/young_woman');
+// Load from CDN (recommended)
+final visemeSet = VisemeSet.fromCdnUrl('https://avatars.voxhelm.com/heads/friendly_robot');
+
+// Or load from API server
+final visemeSet = await VisemeSet.fromUrl('http://localhost:7432/api/head/friendly_robot/svgs');
+
+// Or load all heads from manifest
+final allHeads = await VisemeSet.fromManifest('https://avatars.voxhelm.com/heads');
+
 final ctrl = VisemeController()..setTimeline(timeline);
 final blink = BlinkController()..start();
 
@@ -303,20 +392,21 @@ pip install -r requirements-landmarks.txt    # MediaPipe (Python <=3.12 only)
 
 ```
 voxhelm/                    Python package
-  cli/main.py               Typer CLI (generate-base, generate-visemes, speak, etc.)
+  cli/main.py               Typer CLI (generate, generate-anims, export, speak, etc.)
   core/
     generator.py             SVG cartoon generation (Claude API)
     photo_generator.py       Photorealistic PNG generation (Gemini Flash Image)
+    animations.py            Animation mode definitions + Veo video generation
     api_client.py            LLM client factory (Bedrock / Anthropic / OpenRouter)
     audio.py                 Deepgram TTS / STT
     timeline.py              Phoneme → viseme timeline
     visemes.py               15 OVR viseme definitions + mappings
-    presets.py               Bundled character presets
+    presets.py               14 bundled character presets
   server/app.py             FastAPI server
   viewer/viewer.html        Validation web viewer template
 
-voxhelm_avatar/             Flutter package — drop-in avatar widget
-scripts/                    Standalone scripts (flashimage, landmarks)
+voxhelm_avatar/             Flutter package — drop-in avatar widget (SVG + PNG)
+scripts/publish-avatars.sh  Publish heads to S3/CloudFront CDN
 scripts/legacy/             Superseded scripts from earlier experiments
 webapp/                     Web studio frontend (served by voxhelm serve)
 docs/                       Documentation and experiment history
