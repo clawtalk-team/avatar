@@ -322,6 +322,7 @@ photo_base(style="woman, 30s, dark hair", name="photo_test")
 | `clayton` | Clay golem, terracotta head, chunky features |
 | `nimbus` | Cloud genie, fluffy blue head, wispy top |
 | `clawford` | Cartoon lobster, red-orange shell, cartoon eyes |
+| `friendly_robot` | Friendly robot, silver-grey head, glowing teal eyes |
 
 ---
 

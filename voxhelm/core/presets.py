@@ -69,6 +69,11 @@ PRESETS: dict[str, str] = {
         "— so the standard viseme mouth-swap maps correctly; friendly cartoon, "
         "flat design, warm colours"
     ),
+    "friendly_robot": (
+        "friendly robot, rounded silver-grey head, big glowing teal circular eyes, "
+        "small antenna on top, smooth matte metal panels, warm smile, "
+        "cartoon, flat design, warm colours"
+    ),
 }
 
 
