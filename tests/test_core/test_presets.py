@@ -5,13 +5,13 @@ import pytest
 
 
 def test_preset_count():
-    assert len(PRESETS) == 6
+    assert len(PRESETS) == 14
 
 
 def test_list_presets_returns_dict():
     result = list_presets()
     assert isinstance(result, dict)
-    assert len(result) == 6
+    assert len(result) == 14
 
 
 def test_get_preset_known():

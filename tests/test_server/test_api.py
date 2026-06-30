@@ -23,7 +23,7 @@ def test_list_presets(api_client):
     resp = api_client.get("/api/presets")
     assert resp.status_code == 200
     presets = resp.json()
-    assert len(presets) == 6
+    assert len(presets) == 14
     assert all("key" in p and "description" in p for p in presets)
 
 

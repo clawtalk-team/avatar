@@ -27,6 +27,10 @@ app = typer.Typer(
 )
 
 HEADS_DIR = REPO_ROOT / "outputs" / "heads"
+ALL_VISEMES = [
+    "sil", "PP", "FF", "TH", "dd", "kk", "CH", "SS",
+    "nn", "RR", "aa", "E", "I", "O", "U",
+]
 
 
 def _setup_logging(verbose: bool = False) -> None:
@@ -177,7 +181,222 @@ def generate_visemes_cmd(
         )
 
     typer.echo(f"\nGallery: {gallery}")
-    subprocess.run(["open", str(gallery)], check=False)
+
+    # Regenerate proof page with current assets
+    proof = _write_proof_page(head_dir, head, style, mode)
+    typer.echo(f"Proof: {proof}")
+    subprocess.run(["open", str(proof)], check=False)
+
+
+# ── Step 3: Generate animations ───────────────────────────────────────────
+
+@app.command("generate-anims")
+def generate_anims_cmd(
+    head: str = typer.Option(..., help="Head name (directory in outputs/heads/)"),
+    modes: str = typer.Option(
+        "idle,listening,thinking",
+        help="Comma-separated animation modes to generate",
+    ),
+    out: str = typer.Option("outputs/heads", help="Root output directory"),
+    skip_existing: bool = typer.Option(False, "--skip-existing", help="Skip modes that already have MP4s"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """Generate animation videos (idle/listening/thinking) for a head.
+
+    Requires OPENROUTER_API_KEY. Each mode costs ~$0.20 via Veo 3.1 Lite.
+    """
+    import os
+    _setup_logging(verbose)
+    load_env()
+
+    out_root = REPO_ROOT / out
+    head_dir = out_root / head
+
+    if not head_dir.exists():
+        typer.echo(f"Head not found: {head_dir}", err=True)
+        raise typer.Exit(1)
+
+    api_key = os.environ.get("OPENROUTER_API_KEY", "")
+    if not api_key:
+        typer.echo("OPENROUTER_API_KEY not set", err=True)
+        raise typer.Exit(1)
+
+    from voxhelm.core.animations import AnimationMode, generate_anim_video
+
+    requested = [m.strip() for m in modes.split(",")]
+    anim_dir = head_dir / "anim"
+
+    def progress(viseme: str, idx: int, total: int, status: str) -> None:
+        typer.echo(f"  [{idx+1:2d}/{total}] {viseme:4s}  {status}")
+
+    anim_total_cost = 0.0
+    for mode_str in requested:
+        try:
+            anim_mode = AnimationMode(mode_str)
+        except ValueError:
+            typer.echo(f"Unknown mode: {mode_str}", err=True)
+            continue
+
+        if skip_existing and (anim_dir / f"{mode_str}.mp4").exists():
+            typer.echo(f"\nSkipping {mode_str} (already exists)")
+            continue
+
+        typer.echo(f"\nGenerating {mode_str} animation...")
+        try:
+            result = generate_anim_video(
+                name=head,
+                mode=anim_mode,
+                api_key=api_key,
+                out_root=str(out_root),
+                on_progress=progress,
+            )
+            cost = result.get("cost", 0) if isinstance(result, dict) else 0
+            anim_total_cost += cost
+            cost_str = f" (${cost:.4f})" if cost else ""
+            typer.echo(f"  {mode_str} done.{cost_str}")
+        except Exception as e:
+            typer.echo(f"  {mode_str} failed: {e}", err=True)
+
+    if anim_total_cost > 0:
+        typer.echo(f"\nAnimation cost: ${anim_total_cost:.4f}")
+
+    # Load metadata for proof page
+    meta_path = head_dir / ".voxhelm.json"
+    if meta_path.exists():
+        meta = json.loads(meta_path.read_text())
+        proof = _write_proof_page(head_dir, head, meta.get("style", ""), meta.get("mode", "photo"))
+        typer.echo(f"Proof: {proof}")
+        subprocess.run(["open", str(proof)], check=False)
+
+
+# ── Proof page ────────────────────────────────────────────────────────────
+
+
+def _write_proof_page(head_dir: Path, name: str, style: str, mode: str) -> Path:
+    """Write a proof page with viseme grid, animation previews, and speak link."""
+
+    # Build viseme thumbnail cards
+    cards = []
+    for v in ALL_VISEMES:
+        if mode == "svg":
+            svg_file = head_dir / f"{v}.svg"
+            if svg_file.exists():
+                svg_content = svg_file.read_text()
+                cards.append(
+                    f'<div class="card">'
+                    f'<div class="label">{v}</div>'
+                    f'<div class="svg-wrap">{svg_content}</div>'
+                    f'</div>'
+                )
+            else:
+                cards.append(
+                    f'<div class="card"><div class="label">{v}</div>'
+                    f'<p style="color:#f66">missing</p></div>'
+                )
+        else:
+            png_file = head_dir / f"{v}.png"
+            if png_file.exists():
+                b64 = base64.b64encode(png_file.read_bytes()).decode()
+                cards.append(
+                    f'<div class="card">'
+                    f'<div class="label">{v}</div>'
+                    f'<img src="data:image/png;base64,{b64}" alt="{v}"/>'
+                    f'</div>'
+                )
+            else:
+                cards.append(
+                    f'<div class="card"><div class="label">{v}</div>'
+                    f'<p style="color:#f66">missing</p></div>'
+                )
+
+    # Build animation preview section
+    anim_dir = head_dir / "anim"
+    anim_cards = []
+    for anim_mode in ("idle", "listening", "thinking"):
+        mp4 = anim_dir / f"{anim_mode}.mp4"
+        if mp4.exists():
+            b64 = base64.b64encode(mp4.read_bytes()).decode()
+            anim_cards.append(
+                f'<div class="anim-card">'
+                f'<div class="label">{anim_mode}</div>'
+                f'<video autoplay loop muted playsinline '
+                f'src="data:video/mp4;base64,{b64}" '
+                f'style="width:200px;height:200px;border-radius:8px;object-fit:cover">'
+                f'</video></div>'
+            )
+        else:
+            anim_cards.append(
+                f'<div class="anim-card">'
+                f'<div class="label">{anim_mode}</div>'
+                f'<p style="color:#888">not generated</p></div>'
+            )
+
+    anim_section = ""
+    anim_count = sum(1 for m in ("idle", "listening", "thinking")
+                     if (anim_dir / f"{m}.mp4").exists())
+    if anim_cards:
+        cost_note = ""
+        if anim_count > 0:
+            cost_note = (
+                f'<p class="cost">Generated {anim_count} &times; Veo 3.1 Lite video via OpenRouter '
+                f'&mdash; ~$0.20 per mode, ~$0.60 total for all 3.</p>'
+            )
+        anim_section = f"""
+  <h2>Animation Modes</h2>
+  <div class="grid">{"".join(anim_cards)}</div>
+  {cost_note}"""
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"/><title>{name} — Proof</title>
+<style>
+  body{{background:#1a1a1a;color:#eee;font-family:system-ui,sans-serif;padding:20px;max-width:1200px;margin:0 auto}}
+  h1{{color:#fff;margin-bottom:4px}}
+  h2{{color:#ddd;margin-top:32px;margin-bottom:12px;border-bottom:1px solid #333;padding-bottom:8px}}
+  p.sub{{color:#888;margin-top:0;margin-bottom:20px;font-size:14px}}
+  .grid{{display:flex;flex-wrap:wrap;gap:16px}}
+  .card,.anim-card{{background:#2a2a2a;border-radius:12px;padding:12px;text-align:center;width:220px}}
+  .label{{font-size:13px;font-weight:700;color:#7cf;margin:0 0 8px}}
+  .card img,.svg-wrap svg{{width:200px;height:200px;display:block;margin:0 auto;border-radius:8px;object-fit:cover}}
+  .cost{{color:#888;font-size:12px;margin-top:12px;font-style:italic}}
+  .next-steps{{background:#222;border:1px solid #333;border-radius:8px;padding:16px;margin-top:8px}}
+  .next-steps h3{{margin:0 0 12px;color:#fff;font-size:15px}}
+  .next-steps li{{margin:6px 0;line-height:1.5}}
+  .next-steps a{{color:#7cf}}
+  code{{background:#333;padding:2px 6px;border-radius:4px;font-size:13px}}
+</style></head>
+<body>
+  <h1>{name}</h1>
+  <p class="sub">Style: {style} &mdash; Mode: {mode}</p>
+
+  <h2>Visemes</h2>
+  <div class="grid">{"".join(cards)}</div>
+  {anim_section}
+
+  <h2>Next Steps</h2>
+  <div class="next-steps">
+    <h3>Speech Test</h3>
+    <ul>
+      <li><strong>Web studio:</strong> Run <code>voxhelm serve</code> then open
+        <a href="http://localhost:7432">localhost:7432</a> &mdash; select <em>{name}</em>
+        from the sidebar to test speech with the Speak Demo.</li>
+      <li><strong>CLI:</strong> <code>voxhelm speak --head {name} --text "Hello, I am {name}."</code></li>
+    </ul>
+    <h3>Flutter Integration</h3>
+    <ul>
+      <li><strong>Export to app:</strong> <code>voxhelm export --head {name}</code>
+        &mdash; copies viseme assets to <code>../flutter-app/assets/heads/{name}/</code>
+        and registers in <code>pubspec.yaml</code></li>
+      <li><strong>Or load from API:</strong> <code>VisemeSet.fromUrl('http://host:7432/api/head/{name}/svgs')</code></li>
+      <li>See <a href="file://{str(REPO_ROOT / 'docs' / 'flutter_integration.md')}">docs/flutter_integration.md</a>
+        for full guide.</li>
+    </ul>
+  </div>
+</body></html>"""
+
+    proof_path = head_dir / "proof.html"
+    proof_path.write_text(html)
+    return proof_path
 
 
 # ── One-shot generate (both steps) ────────────────────────────────────────
@@ -241,8 +460,41 @@ def generate(
             include_blink=not no_blink, on_progress=progress,
         )
 
-    typer.echo(f"\nGallery: {gallery}")
-    subprocess.run(["open", str(gallery)], check=False)
+    typer.echo(f"\nVisemes done: {gallery}")
+
+    # Step 3: Generate animation videos (idle/listening/thinking)
+    import os
+    api_key = os.environ.get("OPENROUTER_API_KEY", "")
+    if api_key:
+        from voxhelm.core.animations import AnimationMode, generate_anim_video
+
+        anim_total_cost = 0.0
+        for anim_mode in AnimationMode:
+            typer.echo(f"\nGenerating {anim_mode.value} animation...")
+            try:
+                result = generate_anim_video(
+                    name=resolved_name,
+                    mode=anim_mode,
+                    api_key=api_key,
+                    out_root=str(out_root),
+                    on_progress=progress,
+                )
+                cost = result.get("cost", 0) if isinstance(result, dict) else 0
+                anim_total_cost += cost
+                cost_str = f" (${cost:.4f})" if cost else ""
+                typer.echo(f"  {anim_mode.value} animation done.{cost_str}")
+            except Exception as e:
+                typer.echo(f"  {anim_mode.value} animation failed: {e}", err=True)
+        if anim_total_cost > 0:
+            typer.echo(f"\nAnimation cost: ${anim_total_cost:.4f}")
+    else:
+        typer.echo("\nSkipping animation generation (no OPENROUTER_API_KEY).")
+
+    # Step 4: Write and open proof page
+    head_dir = out_root / resolved_name
+    proof = _write_proof_page(head_dir, resolved_name, resolved_style, mode)
+    typer.echo(f"\nProof: {proof}")
+    subprocess.run(["open", str(proof)], check=False)
 
 
 # ── Speak ──────────────────────────────────────────────────────────────────
@@ -299,6 +551,98 @@ def speak(
 
     typer.echo(f"\nDemo: {out_path}")
     subprocess.run(["open", str(out_path)], check=False)
+
+
+# ── Export ─────────────────────────────────────────────────────────────────
+
+@app.command()
+def export(
+    head: str = typer.Option(..., help="Head name (directory in outputs/heads/)"),
+    target: str = typer.Option(
+        None, help="Target Flutter app directory (default: ../flutter-app)"
+    ),
+    out: str = typer.Option("outputs/heads", help="Root output directory"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """Package a generated head into a Flutter app's assets.
+
+    Copies viseme files (SVG or PNG) to the target app's
+    assets/heads/{name}/ directory and registers the asset path
+    in pubspec.yaml if not already present.
+    """
+    import shutil
+    import yaml
+
+    _setup_logging(verbose)
+
+    head_dir = REPO_ROOT / out / head
+    if not head_dir.exists():
+        typer.echo(f"Head not found: {head_dir}", err=True)
+        raise typer.Exit(1)
+
+    # Detect mode
+    has_svgs = any((head_dir / f"{v}.svg").exists() for v in ALL_VISEMES)
+    has_pngs = any((head_dir / f"{v}.png").exists() for v in ALL_VISEMES)
+    if not has_svgs and not has_pngs:
+        typer.echo(f"No viseme assets found in {head_dir}", err=True)
+        raise typer.Exit(1)
+    ext = "svg" if has_svgs else "png"
+
+    # Resolve target Flutter app
+    target_root = Path(target) if target else REPO_ROOT.parent / "flutter-app"
+    pubspec_path = target_root / "pubspec.yaml"
+    if not pubspec_path.exists():
+        typer.echo(f"No pubspec.yaml at {target_root} — is this a Flutter app?", err=True)
+        raise typer.Exit(1)
+
+    # Copy viseme files
+    dest_dir = target_root / "assets" / "heads" / head
+    dest_dir.mkdir(parents=True, exist_ok=True)
+
+    copied = 0
+    for v in ALL_VISEMES:
+        src = head_dir / f"{v}.{ext}"
+        if src.exists():
+            shutil.copy2(src, dest_dir / f"{v}.{ext}")
+            copied += 1
+
+    # Also copy extras (blink, brows_up) if they exist
+    for extra in ("blink", "brows_up"):
+        src = head_dir / f"{extra}.{ext}"
+        if src.exists():
+            shutil.copy2(src, dest_dir / f"{extra}.{ext}")
+            copied += 1
+
+    typer.echo(f"Copied {copied} files to {dest_dir}")
+
+    # Register in pubspec.yaml if needed
+    asset_entry = f"assets/heads/{head}/"
+    pubspec_text = pubspec_path.read_text()
+    pubspec = yaml.safe_load(pubspec_text)
+
+    flutter_assets = (
+        pubspec.get("flutter", {}).get("assets", []) if pubspec.get("flutter") else []
+    )
+    if asset_entry not in flutter_assets:
+        # Insert the asset entry after the last heads/ entry, or at end of assets
+        marker = "    - assets/heads/"
+        lines = pubspec_text.splitlines(keepends=True)
+        insert_idx = None
+        for i, line in enumerate(lines):
+            if marker in line:
+                insert_idx = i + 1
+        if insert_idx is not None:
+            lines.insert(insert_idx, f"    - {asset_entry}\n")
+            pubspec_path.write_text("".join(lines))
+            typer.echo(f"Added '{asset_entry}' to {pubspec_path}")
+        else:
+            typer.echo(
+                f"Could not find assets/heads/ section in pubspec.yaml — "
+                f"add manually: '    - {asset_entry}'",
+                err=True,
+            )
+    else:
+        typer.echo(f"Asset entry '{asset_entry}' already in pubspec.yaml")
 
 
 # ── Validate ───────────────────────────────────────────────────────────────

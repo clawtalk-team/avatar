@@ -197,12 +197,21 @@ def create_app():
                 except Exception:
                     pass
 
+            # Check for animation videos
+            anim_dir = d / "anim"
+            anims = []
+            if anim_dir.exists():
+                for m in AnimationMode:
+                    if (anim_dir / f"{m.value}.mp4").exists():
+                        anims.append(m.value)
+
             heads.append({
                 "name": d.name,
                 "mode": meta.get("mode", mode),
                 "visemes": asset_count,
                 "complete": asset_count >= 15,
                 "prompt": meta.get("style", ""),
+                "animations": anims,
             })
         return heads
 
@@ -652,18 +661,23 @@ def create_app():
             "debug": debug,
         }
 
-    @app.get("/heads/{name}/{file}")
+    @app.get("/heads/{name}/{file:path}")
     async def serve_head_file(name: str, file: str):
-        """Serve a raw file from a head directory."""
+        """Serve a raw file from a head directory (supports subdirectories)."""
+        # Prevent path traversal
+        if ".." in file:
+            raise HTTPException(400, "Invalid path")
         f = HEADS_DIR / name / file
         if not f.exists():
             raise HTTPException(404)
-        if file.endswith(".svg"):
-            media = "image/svg+xml"
-        elif file.endswith(".png"):
-            media = "image/png"
-        else:
-            media = "text/html"
+        media_types = {
+            ".svg": "image/svg+xml",
+            ".png": "image/png",
+            ".mp4": "video/mp4",
+            ".html": "text/html",
+            ".json": "application/json",
+        }
+        media = media_types.get(f.suffix, "application/octet-stream")
         return FileResponse(f, media_type=media)
 
     return app

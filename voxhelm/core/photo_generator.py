@@ -108,7 +108,7 @@ def _post(payload: dict, api_key: str) -> dict:
         },
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=180) as resp:
+    with urllib.request.urlopen(req, timeout=300) as resp:
         return json.loads(resp.read().decode("utf-8"))
 
 
@@ -159,10 +159,11 @@ def _generate_image(prompt: str, api_key: str, input_png: bytes | None = None) -
         "modalities": ["image", "text"],
     }
     last_err = None
-    for attempt in range(1, 4):
+    for attempt in range(1, 6):
         try:
             return _extract_image(_post(payload, api_key))
-        except (urllib.error.HTTPError, urllib.error.URLError, RuntimeError, KeyError) as e:
+        except (urllib.error.HTTPError, urllib.error.URLError,
+                RuntimeError, KeyError, TimeoutError, OSError) as e:
             last_err = e
             detail = ""
             if isinstance(e, urllib.error.HTTPError):
@@ -170,9 +171,9 @@ def _generate_image(prompt: str, api_key: str, input_png: bytes | None = None) -
                     detail = e.read().decode("utf-8")[:300]
                 except Exception:
                     pass
-            log.warning("Attempt %d failed: %s %s", attempt, e, detail)
-            time.sleep(2 * attempt)
-    raise RuntimeError(f"Image generation failed after retries: {last_err}")
+            log.warning("Attempt %d/%d failed: %s %s", attempt, 5, e, detail)
+            time.sleep(3 * attempt)
+    raise RuntimeError(f"Image generation failed after 5 retries: {last_err}")
 
 
 def _build_base_prompt(style: str) -> str:
@@ -191,6 +192,8 @@ def _build_edit_prompt(style: str, viseme: str) -> str:
         f"Edit the provided portrait. Keep the EXACT same person as {style} — "
         "identical face shape, hairstyle, skin tone and texture, camera angle, head "
         "position, framing, lighting, and plain gray background. "
+        "Keep the EXACT same crop and framing — head, neck, and shoulders must be "
+        "visible at the same size and position as the original. "
         "Keep the eyes and eyebrows exactly as in the base. "
         f"Change ONLY the mouth and jaw so the mouth shows: {desc}. "
         "Keep a calm neutral expression with relaxed eyebrows and normal eyes — "
@@ -204,6 +207,8 @@ def _build_extra_edit_prompt(style: str, region: str, desc: str) -> str:
         f"Edit the provided portrait. Keep the EXACT same person as {style} — "
         "identical face shape, hairstyle, skin tone and texture, camera angle, head "
         "position, framing, lighting, and plain gray background. "
+        "Keep the EXACT same crop and framing — head, neck, and shoulders must be "
+        "visible at the same size and position as the original. "
         "Keep the mouth exactly as in the base (gently closed). "
         f"Change ONLY the {region} so that: {desc}. "
         "Do not change anything else. Front-facing, looking straight at the camera."
@@ -396,12 +401,15 @@ def generate_visemes(
         except Exception as e:
             return (label, out_path, None, {}, str(e))
 
+    failed_frames: list[str] = []
+
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
         futures = {pool.submit(_do_one, item): item for item in work}
         for future in as_completed(futures):
             label, out_path, png, usage, error = future.result()
             completed += 1
             if error:
+                failed_frames.append(label)
                 log.error("[%d/%d] %s FAILED: %s", completed, total, label, error)
                 if on_progress:
                     on_progress(label, completed - 1, total, f"error: {error}")
@@ -415,6 +423,12 @@ def generate_visemes(
                          completed, total, label, len(png), frame_cost)
                 if on_progress:
                     on_progress(label, completed - 1, total, "ok")
+
+    if failed_frames:
+        log.warning(
+            "%d frame(s) failed: %s — re-run with --skip-existing to retry only these",
+            len(failed_frames), ", ".join(failed_frames),
+        )
 
     # Write manifest
     man_path.write_text(json.dumps(manifest, indent=2))
