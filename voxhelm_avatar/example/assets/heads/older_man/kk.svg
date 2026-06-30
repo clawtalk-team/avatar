@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Background -->
+  <rect width="512" height="512" fill="#E8F0F2"/>
+  
+  <!-- Neck -->
+  <rect x="216" y="380" width="80" height="60" fill="#C4926E" rx="5"/>
+  
+  <!-- Shoulders -->
+  <ellipse cx="256" cy="460" rx="130" ry="50" fill="#4A7C8C"/>
+  
+  <!-- Collar -->
+  <path d="M200 435 L256 410 L312 435" fill="none" stroke="#3A6070" stroke-width="3"/>
+  
+  <!-- Ears -->
+  <ellipse cx="120" cy="270" rx="25" ry="35" fill="#C4926E"/>
+  <ellipse cx="120" cy="270" rx="15" ry="22" fill="#B07D5A"/>
+  <ellipse cx="392" cy="270" rx="25" ry="35" fill="#C4926E"/>
+  <ellipse cx="392" cy="270" rx="15" ry="22" fill="#B07D5A"/>
+  
+  <!-- Head shape -->
+  <ellipse cx="256" cy="250" rx="135" ry="155" fill="#D4A574"/>
+  
+  <!-- Weathered skin texture - subtle wrinkle lines -->
+  <path d="M180 200 Q190 195 200 200" fill="none" stroke="#BF9060" stroke-width="1.5" opacity="0.6"/>
+  <path d="M312 200 Q322 195 332 200" fill="none" stroke="#BF9060" stroke-width="1.5" opacity="0.6"/>
+  
+  <!-- Forehead wrinkles -->
+  <path d="M200 160 Q256 155 312 160" fill="none" stroke="#BF9060" stroke-width="1.5" opacity="0.5"/>
+  <path d="M210 175 Q256 170 302 175" fill="none" stroke="#BF9060" stroke-width="1.5" opacity="0.4"/>
+  
+  <!-- White hair -->
+  <path d="M121 220 Q125 130 180 95 Q220 70 256 68 Q292 70 332 95 Q387 130 391 220 Q380 160 340 130 Q300 100 256 98 Q212 100 172 130 Q132 160 121 220 Z" fill="#F0F0F0"/>
+  <path d="M121 220 Q115 180 130 150 Q120 190 125 230 Q128 250 130 240" fill="#E0E0E0"/>
+  <path d="M391 220 Q397 180 382 150 Q392 190 387 230 Q384 250 382 240" fill="#E0E0E0"/>
+  <!-- Side hair tufts -->
+  <path d="M125 230 Q110 210 115 190 Q118 210 130 225 Z" fill="#F0F0F0"/>
+  <path d="M387 230 Q402 210 397 190 Q394 210 382 225 Z" fill="#F0F0F0"/>
+  
+  <!-- Eye sockets (deep-set effect) -->
+  <ellipse cx="200" cy="245" rx="35" ry="28" fill="#BE8A5E"/>
+  <ellipse cx="312" cy="245" rx="35" ry="28" fill="#BE8A5E"/>
+  
+  <!-- Eyes - whites -->
+  <ellipse cx="200" cy="248" rx="26" ry="20" fill="white"/>
+  <ellipse cx="312" cy="248" rx="26" ry="20" fill="white"/>
+  
+  <!-- Irises -->
+  <ellipse cx="203" cy="250" rx="13" ry="14" fill="#5B8CAE"/>
+  <ellipse cx="315" cy="250" rx="13" ry="14" fill="#5B8CAE"/>
+  
+  <!-- Pupils -->
+  <circle cx="205" cy="251" r="6" fill="#1A2A3A"/>
+  <circle cx="317" cy="251" r="6" fill="#1A2A3A"/>
+  
+  <!-- Eye highlights -->
+  <circle cx="208" cy="245" r="3" fill="white" opacity="0.8"/>
+  <circle cx="320" cy="245" r="3" fill="white" opacity="0.8"/>
+  
+  <!-- Crow's feet wrinkles -->
+  <path d="M235 245 Q240 240 243 235" fill="none" stroke="#BF9060" stroke-width="1.2" opacity="0.5"/>
+  <path d="M235 250 Q242 250 245 248" fill="none" stroke="#BF9060" stroke-width="1.2" opacity="0.5"/>
+  <path d="M277 245 Q272 240 269 235" fill="none" stroke="#BF9060" stroke-width="1.2" opacity="0.5"/>
+  <path d="M277 250 Q270 250 267 248" fill="none" stroke="#BF9060" stroke-width="1.2" opacity="0.5"/>
+  
+  <!-- Eyebrows -->
+  <path d="M170 218 Q185 208 220 213 Q230 215 232 217" fill="none" stroke="#A0A0A0" stroke-width="4" stroke-linecap="round"/>
+  <path d="M280 217 Q282 215 292 213 Q327 208 342 218" fill="none" stroke="#A0A0A0" stroke-width="4" stroke-linecap="round"/>
+  
+  <!-- Nose -->
+  <path d="M250 270 Q245 295 238 310 Q248 316 256 316 Q264 316 274 310 Q267 295 262 270" fill="#C4926E" stroke="#B07D5A" stroke-width="1.5"/>
+  
+  <!-- Nasolabial folds -->
+  <path d="M230 310 Q225 330 222 345" fill="none" stroke="#BF9060" stroke-width="1.5" opacity="0.5"/>
+  <path d="M282 310 Q287 330 290 345" fill="none" stroke="#BF9060" stroke-width="1.5" opacity="0.5"/>
+  
+  <!-- Mouth - "kk" viseme: mouth open, back of tongue raised, mid-open -->
+  <!-- Outer mouth opening -->
+  <ellipse cx="256" cy="350" rx="28" ry="20" fill="#2D0A0A"/>
+  
+  <!-- Upper lip -->
+  <path d="M228 345 Q240 338 256 340 Q272 338 284 345 Q272 342 256 343 Q240 342 228 345 Z" fill="#BF7060"/>
+  
+  <!-- Lower lip -->
+  <path d="M230 358 Q243 370 256 372 Q269 370 282 358 Q270 365 256 366 Q242 365 230 358 Z" fill="#C47065"/>
+  
+  <!-- Tongue raised at back (visible inside mouth) -->
+  <path d="M235 358 Q245 352 256 353 Q267 352 277 358 Q270 362 256 363 Q242 362 235 358 Z" fill="#D4605A"/>
+  
+  <!-- Tongue back hump -->
+  <path d="M245 350 Q256 345 267 350 Q262 347 256 346 Q250 347 245 350 Z" fill="#C45550" opacity="0.7"/>
+  
+  <!-- Smile lines around mouth -->
+  <path d="M220 340 Q218 350 220 360" fill="none" stroke="#BF9060" stroke-width="1.2" opacity="0.4"/>
+  <path d="M292 340 Q294 350 292 360" fill="none" stroke="#BF9060" stroke-width="1.2" opacity="0.4"/>
+  
+  <!-- Chin -->
+  <path d="M230 385 Q256 400 282 385" fill="none" stroke="#BF9060" stroke-width="1.5" opacity="0.4"/>
+</svg>

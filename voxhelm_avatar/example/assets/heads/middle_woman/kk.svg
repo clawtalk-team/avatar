@@ -1,0 +1,83 @@
+<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="512" height="512" fill="#E8F4F8"/>
+  
+  <!-- Neck -->
+  <path d="M230 380 L230 430 Q230 445 240 445 L272 445 Q282 445 282 430 L282 380" fill="#8B6B4A"/>
+  
+  <!-- Shoulders -->
+  <path d="M160 445 Q180 430 230 435 L282 435 Q332 430 352 445 L370 480 Q375 500 360 510 L152 510 Q137 500 142 480 Z" fill="#5B4A8A"/>
+  
+  <!-- Hair back -->
+  <ellipse cx="256" cy="240" rx="130" ry="150" fill="#2C2020"/>
+  
+  <!-- Ears -->
+  <ellipse cx="132" cy="270" rx="18" ry="25" fill="#8B6B4A"/>
+  <ellipse cx="132" cy="270" rx="10" ry="16" fill="#7A5C3E"/>
+  <ellipse cx="380" cy="270" rx="18" ry="25" fill="#8B6B4A"/>
+  <ellipse cx="380" cy="270" rx="10" ry="16" fill="#7A5C3E"/>
+  
+  <!-- Face shape -->
+  <ellipse cx="256" cy="270" rx="115" ry="130" fill="#A07850"/>
+  
+  <!-- Hair -->
+  <path d="M140 220 Q145 140 200 110 Q240 95 270 95 Q320 95 350 120 Q380 145 380 200 Q380 180 370 165 Q365 155 355 148 Q340 138 320 135 Q280 125 250 130 Q200 138 180 165 Q160 192 155 220 Q150 200 140 220 Z" fill="#2C2020"/>
+  
+  <!-- Grey streaks in hair -->
+  <path d="M170 170 Q175 145 195 130 Q200 128 195 135 Q180 155 175 180 Z" fill="#808080" opacity="0.7"/>
+  <path d="M340 160 Q350 140 355 130 Q358 128 356 138 Q350 158 345 178 Z" fill="#808080" opacity="0.7"/>
+  <path d="M155 230 Q150 200 155 185 Q157 180 158 190 Q157 210 158 240 Z" fill="#808080" opacity="0.6"/>
+  <path d="M365 210 Q370 190 368 175 Q370 170 372 180 Q372 200 368 225 Z" fill="#808080" opacity="0.6"/>
+  
+  <!-- Hair sides falling -->
+  <path d="M135 220 Q140 200 145 240 Q148 280 150 310 Q145 330 140 310 Q130 270 135 220 Z" fill="#2C2020"/>
+  <path d="M377 220 Q372 200 367 240 Q364 280 362 310 Q367 330 372 310 Q382 270 377 220 Z" fill="#2C2020"/>
+  
+  <!-- Grey streaks on sides -->
+  <path d="M142 250 Q144 270 146 300 Q143 290 141 270 Z" fill="#808080" opacity="0.6"/>
+  <path d="M370 250 Q368 270 366 300 Q369 290 371 270 Z" fill="#808080" opacity="0.6"/>
+  
+  <!-- Eyebrows -->
+  <path d="M195 220 Q215 210 240 215" stroke="#3D2B1F" stroke-width="5" fill="none" stroke-linecap="round"/>
+  <path d="M275 215 Q300 210 318 220" stroke="#3D2B1F" stroke-width="5" fill="none" stroke-linecap="round"/>
+  
+  <!-- Eyes - whites -->
+  <ellipse cx="220" cy="250" rx="22" ry="20" fill="white"/>
+  <ellipse cx="295" cy="250" rx="22" ry="20" fill="white"/>
+  
+  <!-- Irises -->
+  <ellipse cx="222" cy="252" rx="12" ry="13" fill="#4A3020"/>
+  <ellipse cx="297" cy="252" rx="12" ry="13" fill="#4A3020"/>
+  
+  <!-- Pupils -->
+  <circle cx="223" cy="252" r="5" fill="#1A1A1A"/>
+  <circle cx="298" cy="252" r="5" fill="#1A1A1A"/>
+  
+  <!-- Eye highlights -->
+  <circle cx="226" cy="247" r="3" fill="white"/>
+  <circle cx="301" cy="247" r="3" fill="white"/>
+  
+  <!-- Eyelashes/lids -->
+  <path d="M198 245 Q220 235 242 245" stroke="#3D2B1F" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <path d="M273 245 Q295 235 317 245" stroke="#3D2B1F" stroke-width="3" fill="none" stroke-linecap="round"/>
+  
+  <!-- Nose -->
+  <path d="M252 280 Q248 295 244 305 Q250 310 258 310 Q264 305 260 295 Z" fill="#8B6B4A" opacity="0.7"/>
+  
+  <!-- Mouth - "kk" viseme: open mouth, back of tongue raised, mid-open -->
+  <!-- Outer lip shape -->
+  <path d="M228 335 Q240 330 256 330 Q272 330 284 335 Q292 340 292 350 Q290 365 280 372 Q268 378 256 378 Q244 378 232 372 Q222 365 220 350 Q220 340 228 335 Z" fill="#1A1A1A"/>
+  
+  <!-- Teeth top row -->
+  <path d="M232 335 Q244 332 256 332 Q268 332 280 335 L280 345 Q268 343 256 343 Q244 343 232 345 Z" fill="white"/>
+  
+  <!-- Tongue - back raised for "kk" -->
+  <path d="M235 358 Q240 352 256 352 Q272 352 277 358 Q280 365 275 370 Q268 375 256 375 Q244 375 237 370 Q232 365 235 358 Z" fill="#CC5555"/>
+  
+  <!-- Tongue back raised bump -->
+  <path d="M255 355 Q265 352 272 355 Q278 360 274 366 Q268 370 260 368 Q253 365 252 360 Q253 356 255 355 Z" fill="#B04040"/>
+  
+  <!-- Smile lines -->
+  <path d="M215 330 Q218 335 220 340" stroke="#8B6B4A" stroke-width="2" fill="none" opacity="0.5" stroke-linecap="round"/>
+  <path d="M297 330 Q294 335 292 340" stroke="#8B6B4A" stroke-width="2" fill="none" opacity="0.5" stroke-linecap="round"/>
+</svg>
