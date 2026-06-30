@@ -125,12 +125,26 @@ class _VoxhelmAvatarState extends State<VoxhelmAvatar> {
   }
 
   void _buildSvgCache() {
-    for (final entry in widget.visemeSet.svgs.entries) {
-      _svgCache[entry.key] = SvgPicture.string(
-        entry.value,
-        width: widget.size,
-        height: widget.size,
-      );
+    if (widget.visemeSet.isPng) {
+      // PNG mode: build Image.network widgets
+      for (final entry in widget.visemeSet.assets.entries) {
+        _svgCache[entry.key] = Image.network(
+          entry.value,
+          width: widget.size,
+          height: widget.size,
+          fit: BoxFit.cover,
+          gaplessPlayback: true, // prevents flicker during viseme switches
+        );
+      }
+    } else {
+      // SVG mode: parse SVG strings
+      for (final entry in widget.visemeSet.svgs.entries) {
+        _svgCache[entry.key] = SvgPicture.string(
+          entry.value,
+          width: widget.size,
+          height: widget.size,
+        );
+      }
     }
   }
 
@@ -144,18 +158,20 @@ class _VoxhelmAvatarState extends State<VoxhelmAvatar> {
     super.dispose();
   }
 
-  /// Get the SVG widget, potentially with animation transforms injected.
-  Widget? _getSvgWidget(String viseme) {
+  /// Get the widget for the current viseme, potentially with animation transforms.
+  Widget? _getVisemeWidget(String viseme) {
     final animCtrl = widget.animationController;
 
-    // Fast path: no animation controller or speaking mode — use cached widget
+    // Fast path: no animation controller, speaking mode, or PNG mode
+    // (PNG mode can't inject SVG transforms)
     if (animCtrl == null ||
         animCtrl.mode == AnimationMode.speaking ||
-        !animCtrl.isRunning) {
+        !animCtrl.isRunning ||
+        widget.visemeSet.isPng) {
       return _svgCache[viseme] ?? _svgCache['sil'];
     }
 
-    // Apply transforms by modifying the SVG string.
+    // SVG animation: apply transforms by modifying the SVG string.
     // Quantize transform values to reduce re-parses (~10 updates/sec instead of 60).
     final transforms = animCtrl.transforms;
     final cacheKey = '$viseme|${transforms.entries.map((e) =>
@@ -227,11 +243,11 @@ class _VoxhelmAvatarState extends State<VoxhelmAvatar> {
   @override
   Widget build(BuildContext context) {
     final viseme = widget.controller.currentViseme;
-    final svgWidget = _getSvgWidget(viseme);
+    final visemeWidget = _getVisemeWidget(viseme);
 
     Widget child = Stack(
       children: [
-        if (svgWidget != null) svgWidget,
+        if (visemeWidget != null) visemeWidget,
         if (widget.blinkController != null &&
             widget.blinkController!.eyeClosedness > 0)
           CustomPaint(

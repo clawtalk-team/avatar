@@ -17,19 +17,5 @@ dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/heads/young_man/
-    - assets/heads/middle_man/
-    - assets/heads/older_man/
-    - assets/heads/young_woman/
-    - assets/heads/middle_woman/
-    - assets/heads/older_woman/
-    - assets/heads/photo_man/
-    - assets/heads/photo_woman/
-    - assets/heads/chrome_bot/
-    - assets/heads/bolt_bot/
-    - assets/heads/mossling/
-    - assets/heads/clayton/
-    - assets/heads/nimbus/
-    - assets/heads/clawford/
     - assets/data/
     - assets/audio/

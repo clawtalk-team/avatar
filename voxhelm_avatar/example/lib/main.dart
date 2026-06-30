@@ -40,55 +40,25 @@ class AvatarInfo {
 
 enum AvatarStyle { cartoon, photorealistic }
 
+/// CDN base URL for avatar assets.
+const _cdnBase = 'https://avatars.voxhelm.com/heads';
+
 const _avatars = [
-  AvatarInfo(
-    id: 'young_woman',
-    label: 'Young Woman',
-    assetPath: 'assets/heads/young_woman',
-    style: AvatarStyle.cartoon,
-  ),
-  AvatarInfo(
-    id: 'young_man',
-    label: 'Young Man',
-    assetPath: 'assets/heads/young_man',
-    style: AvatarStyle.cartoon,
-    eyelidColor: Color(0xFFD4A574),
-    eyelidStrokeColor: Color(0xFF2D1F14),
-  ),
-  AvatarInfo(
-    id: 'middle_woman',
-    label: 'Middle Woman',
-    assetPath: 'assets/heads/middle_woman',
-    style: AvatarStyle.cartoon,
-  ),
-  AvatarInfo(
-    id: 'middle_man',
-    label: 'Middle Man',
-    assetPath: 'assets/heads/middle_man',
-    style: AvatarStyle.cartoon,
-    eyelidColor: Color(0xFF8B6B4E),
-    eyelidStrokeColor: Color(0xFF3D2B1F),
-  ),
-  AvatarInfo(
-    id: 'older_woman',
-    label: 'Older Woman',
-    assetPath: 'assets/heads/older_woman',
-    style: AvatarStyle.cartoon,
-  ),
-  AvatarInfo(
-    id: 'older_man',
-    label: 'Older Man',
-    assetPath: 'assets/heads/older_man',
-    style: AvatarStyle.cartoon,
-    eyelidColor: Color(0xFFD4A574),
-    eyelidStrokeColor: Color(0xFF2D1F14),
-  ),
-  AvatarInfo(
-    id: 'flash_woman',
-    label: 'Flash Woman',
-    assetPath: 'assets/heads/flash_woman',
-    style: AvatarStyle.photorealistic,
-  ),
+  AvatarInfo(id: 'young_woman', label: 'Young Woman', assetPath: '$_cdnBase/young_woman', style: AvatarStyle.photorealistic),
+  AvatarInfo(id: 'young_man', label: 'Young Man', assetPath: '$_cdnBase/young_man', style: AvatarStyle.photorealistic),
+  AvatarInfo(id: 'middle_woman', label: 'Middle Woman', assetPath: '$_cdnBase/middle_woman', style: AvatarStyle.photorealistic),
+  AvatarInfo(id: 'middle_man', label: 'Middle Man', assetPath: '$_cdnBase/middle_man', style: AvatarStyle.photorealistic),
+  AvatarInfo(id: 'older_woman', label: 'Older Woman', assetPath: '$_cdnBase/older_woman', style: AvatarStyle.photorealistic),
+  AvatarInfo(id: 'older_man', label: 'Older Man', assetPath: '$_cdnBase/older_man', style: AvatarStyle.photorealistic),
+  AvatarInfo(id: 'photo_man', label: 'Photo Man', assetPath: '$_cdnBase/photo_man', style: AvatarStyle.photorealistic),
+  AvatarInfo(id: 'photo_woman', label: 'Photo Woman', assetPath: '$_cdnBase/photo_woman', style: AvatarStyle.photorealistic),
+  AvatarInfo(id: 'chrome_bot', label: 'Chrome Bot', assetPath: '$_cdnBase/chrome_bot', style: AvatarStyle.photorealistic),
+  AvatarInfo(id: 'bolt_bot', label: 'Bolt Bot', assetPath: '$_cdnBase/bolt_bot', style: AvatarStyle.photorealistic),
+  AvatarInfo(id: 'mossling', label: 'Mossling', assetPath: '$_cdnBase/mossling', style: AvatarStyle.photorealistic),
+  AvatarInfo(id: 'clayton', label: 'Clayton', assetPath: '$_cdnBase/clayton', style: AvatarStyle.photorealistic),
+  AvatarInfo(id: 'nimbus', label: 'Nimbus', assetPath: '$_cdnBase/nimbus', style: AvatarStyle.photorealistic),
+  AvatarInfo(id: 'clawford', label: 'Clawford', assetPath: '$_cdnBase/clawford', style: AvatarStyle.photorealistic),
+  AvatarInfo(id: 'friendly_robot', label: 'Friendly Robot', assetPath: '$_cdnBase/friendly_robot', style: AvatarStyle.photorealistic),
 ];
 
 // ---------------------------------------------------------------------------
@@ -121,11 +91,6 @@ class AvatarSelectionScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cartoon =
-        _avatars.where((a) => a.style == AvatarStyle.cartoon).toList();
-    final photo =
-        _avatars.where((a) => a.style == AvatarStyle.photorealistic).toList();
-
     return Scaffold(
       backgroundColor: const Color(0xFF0D0D0D),
       appBar: AppBar(
@@ -136,16 +101,10 @@ class AvatarSelectionScreen extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         children: [
           _SectionHeader(
-            title: 'Cartoon',
-            subtitle: '${cartoon.length} avatars — vector SVG',
+            title: 'Avatars',
+            subtitle: '${_avatars.length} presets — served from avatars.voxhelm.com',
           ),
-          _AvatarGrid(avatars: cartoon),
-          const SizedBox(height: 24),
-          _SectionHeader(
-            title: 'Photorealistic',
-            subtitle: '${photo.length} avatars — Gemini Flash Image',
-          ),
-          _AvatarGrid(avatars: photo),
+          _AvatarGrid(avatars: _avatars),
           const SizedBox(height: 32),
         ],
       ),
@@ -220,18 +179,9 @@ class _AvatarCardState extends State<_AvatarCard> {
   }
 
   Future<void> _loadThumbnail() async {
-    if (widget.info.style == AvatarStyle.photorealistic) {
-      // PNG — just mark as loaded, Image.asset handles rendering.
-      if (mounted) setState(() => _loaded = true);
-      return;
-    }
-    try {
-      final svg = await DefaultAssetBundle.of(context)
-          .loadString('${widget.info.assetPath}/sil.svg');
-      if (mounted) setState(() { _silSvg = svg; _loaded = true; });
-    } catch (_) {
-      if (mounted) setState(() => _loaded = true);
-    }
+    // All avatars now load from CDN — just mark as loaded immediately
+    // and let Image.network handle the fetch.
+    if (mounted) setState(() => _loaded = true);
   }
 
   @override
@@ -261,19 +211,18 @@ class _AvatarCardState extends State<_AvatarCard> {
               child: ClipRRect(
                 borderRadius:
                     const BorderRadius.vertical(top: Radius.circular(16)),
-                child: !_loaded
-                    ? const Center(
-                        child: CircularProgressIndicator(strokeWidth: 2))
-                    : isPhoto
-                        ? Image.asset(
-                            '${widget.info.assetPath}/sil.png',
+                child: Image.network(
+                            '${widget.info.assetPath}/sil.${widget.info.ext}',
                             fit: BoxFit.cover,
-                          )
-                        : _silSvg != null
-                            ? SvgPicture.string(_silSvg!, fit: BoxFit.cover)
-                            : const Center(
-                                child: Icon(Icons.broken_image,
-                                    color: Colors.grey)),
+                            gaplessPlayback: true,
+                            loadingBuilder: (context, child, progress) {
+                              if (progress == null) return child;
+                              return const Center(
+                                child: CircularProgressIndicator(strokeWidth: 2));
+                            },
+                            errorBuilder: (_, __, ___) => const Center(
+                              child: Icon(Icons.broken_image, color: Colors.grey)),
+                          ),
               ),
             ),
             Padding(
@@ -373,17 +322,18 @@ class _AvatarPlayerScreenState extends State<AvatarPlayerScreen> {
       );
       setState(() => _visemeSet = set);
     } else {
-      // Precache all viseme PNGs.
-      for (final v in kAllVisemes) {
-        // ignore errors for missing visemes
+      // Photo mode: build URL-based viseme set from CDN
+      final set = VisemeSet.fromCdnUrl(widget.info.assetPath);
+      // Precache images for smooth frame switching
+      for (final url in set.assets.values) {
         try {
-          await precacheImage(
-            AssetImage('${widget.info.assetPath}/$v.png'),
-            context,
-          );
+          await precacheImage(NetworkImage(url), context);
         } catch (_) {}
       }
-      setState(() => _photoLoaded = true);
+      setState(() {
+        _visemeSet = set;
+        _photoLoaded = true;
+      });
     }
 
     final raw = await DefaultAssetBundle.of(context)
@@ -420,10 +370,7 @@ class _AvatarPlayerScreenState extends State<AvatarPlayerScreen> {
     super.dispose();
   }
 
-  bool get _ready =>
-      widget.info.style == AvatarStyle.cartoon
-          ? _visemeSet != null
-          : _photoLoaded;
+  bool get _ready => _visemeSet != null;
 
   @override
   Widget build(BuildContext context) {
@@ -455,11 +402,11 @@ class _AvatarPlayerScreenState extends State<AvatarPlayerScreen> {
                   ),
                 const SizedBox(height: 24),
                 Center(
-                  child: isCartoon
+                  child: _visemeSet != null
                       ? VoxhelmAvatar(
                           visemeSet: _visemeSet!,
                           controller: _visemeCtrl,
-                          blinkController: _blinkCtrl,
+                          blinkController: isCartoon ? _blinkCtrl : null,
                           size: 280,
                           borderRadius: BorderRadius.circular(20),
                           leftEyeCenter: widget.info.leftEyeCenter,
@@ -469,11 +416,7 @@ class _AvatarPlayerScreenState extends State<AvatarPlayerScreen> {
                           eyelidColor: widget.info.eyelidColor,
                           eyelidStrokeColor: widget.info.eyelidStrokeColor,
                         )
-                      : _PhotoAvatar(
-                          assetPath: widget.info.assetPath,
-                          controller: _visemeCtrl,
-                          size: 280,
-                        ),
+                      : const SizedBox(width: 280, height: 280),
                 ),
                 const SizedBox(height: 12),
                 // Style badge
@@ -544,48 +487,3 @@ class _AvatarPlayerScreenState extends State<AvatarPlayerScreen> {
 
 // ---------------------------------------------------------------------------
 // Photorealistic PNG Avatar Widget
-// ---------------------------------------------------------------------------
-
-/// Displays a photorealistic avatar by swapping between pre-rendered PNG
-/// images (one per viseme) driven by a [VisemeController].
-class _PhotoAvatar extends StatelessWidget {
-  final String assetPath;
-  final VisemeController controller;
-  final double size;
-
-  const _PhotoAvatar({
-    required this.assetPath,
-    required this.controller,
-    required this.size,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: controller,
-      builder: (context, _) {
-        final viseme = controller.currentViseme;
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(20),
-          child: SizedBox(
-            width: size,
-            height: size,
-            child: Image.asset(
-              '$assetPath/$viseme.png',
-              width: size,
-              height: size,
-              fit: BoxFit.cover,
-              // Fall back to sil if the viseme image doesn't exist.
-              errorBuilder: (_, __, ___) => Image.asset(
-                '$assetPath/sil.png',
-                width: size,
-                height: size,
-                fit: BoxFit.cover,
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
