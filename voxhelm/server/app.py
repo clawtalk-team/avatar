@@ -664,10 +664,10 @@ def create_app():
     @app.get("/heads/{name}/{file:path}")
     async def serve_head_file(name: str, file: str):
         """Serve a raw file from a head directory (supports subdirectories)."""
-        # Prevent path traversal
-        if ".." in file:
+        f = (HEADS_DIR / name / file).resolve()
+        # Prevent path traversal — resolved path must be within HEADS_DIR
+        if not str(f).startswith(str(HEADS_DIR.resolve())):
             raise HTTPException(400, "Invalid path")
-        f = HEADS_DIR / name / file
         if not f.exists():
             raise HTTPException(404)
         media_types = {

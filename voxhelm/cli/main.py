@@ -27,10 +27,8 @@ app = typer.Typer(
 )
 
 HEADS_DIR = REPO_ROOT / "outputs" / "heads"
-ALL_VISEMES = [
-    "sil", "PP", "FF", "TH", "dd", "kk", "CH", "SS",
-    "nn", "RR", "aa", "E", "I", "O", "U",
-]
+
+from voxhelm.core.visemes import ALL_VISEMES
 
 
 def _setup_logging(verbose: bool = False) -> None:
