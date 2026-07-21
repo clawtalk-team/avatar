@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import 'animation_frame_controller.dart';
 import 'animation_mode_controller.dart';
 import 'blink_controller.dart';
 import 'viseme_controller.dart';
@@ -38,6 +39,13 @@ class VoxhelmAvatar extends StatefulWidget {
   /// Optional controller for animation mode transforms (idle/listening/thinking).
   final AnimationModeController? animationController;
 
+  /// Optional controller for pre-rendered animation frame cycling.
+  ///
+  /// When provided, non-speaking modes render the current animation frame
+  /// from the CDN instead of applying SVG group transforms. Takes precedence
+  /// over [animationController] for idle/listening/thinking states.
+  final AnimationFrameController? animationFrameController;
+
   /// Widget size (width and height).
   final double size;
 
@@ -71,6 +79,7 @@ class VoxhelmAvatar extends StatefulWidget {
     required this.controller,
     this.blinkController,
     this.animationController,
+    this.animationFrameController,
     this.size = 200,
     this.borderRadius,
     this.backgroundColor = const Color(0xFF1A1A1A),
@@ -101,6 +110,7 @@ class _VoxhelmAvatarState extends State<VoxhelmAvatar> {
     widget.controller.addListener(_onUpdate);
     widget.blinkController?.addListener(_onUpdate);
     widget.animationController?.addListener(_onUpdate);
+    widget.animationFrameController?.addListener(_onUpdate);
   }
 
   @override
@@ -122,15 +132,33 @@ class _VoxhelmAvatarState extends State<VoxhelmAvatar> {
       old.animationController?.removeListener(_onUpdate);
       widget.animationController?.addListener(_onUpdate);
     }
+    if (old.animationFrameController != widget.animationFrameController) {
+      old.animationFrameController?.removeListener(_onUpdate);
+      widget.animationFrameController?.addListener(_onUpdate);
+    }
   }
 
   void _buildSvgCache() {
-    for (final entry in widget.visemeSet.svgs.entries) {
-      _svgCache[entry.key] = SvgPicture.string(
-        entry.value,
-        width: widget.size,
-        height: widget.size,
-      );
+    if (widget.visemeSet.isPng) {
+      // PNG mode: build Image.network widgets
+      for (final entry in widget.visemeSet.assets.entries) {
+        _svgCache[entry.key] = Image.network(
+          entry.value,
+          width: widget.size,
+          height: widget.size,
+          fit: BoxFit.cover,
+          gaplessPlayback: true,
+        );
+      }
+    } else {
+      // SVG mode: parse SVG strings
+      for (final entry in widget.visemeSet.svgs.entries) {
+        _svgCache[entry.key] = SvgPicture.string(
+          entry.value,
+          width: widget.size,
+          height: widget.size,
+        );
+      }
     }
   }
 
@@ -141,21 +169,39 @@ class _VoxhelmAvatarState extends State<VoxhelmAvatar> {
     widget.controller.removeListener(_onUpdate);
     widget.blinkController?.removeListener(_onUpdate);
     widget.animationController?.removeListener(_onUpdate);
+    widget.animationFrameController?.removeListener(_onUpdate);
     super.dispose();
   }
 
-  /// Get the SVG widget, potentially with animation transforms injected.
-  Widget? _getSvgWidget(String viseme) {
+  /// Get the widget for the current viseme, with optional animation.
+  Widget? _getVisemeWidget(String viseme) {
     final animCtrl = widget.animationController;
+    final frameCtrl = widget.animationFrameController;
 
-    // Fast path: no animation controller or speaking mode — use cached widget
+    // Check if we should show animation frames (non-speaking mode with frames available)
+    if (frameCtrl != null && frameCtrl.isRunning) {
+      final frameUrl = frameCtrl.currentFrameUrl;
+      if (frameUrl != null) {
+        // In non-speaking mode with animation frames, show the cycling frame
+        return Image.network(
+          frameUrl,
+          width: widget.size,
+          height: widget.size,
+          fit: BoxFit.cover,
+          gaplessPlayback: true,
+        );
+      }
+    }
+
+    // Fast path: no SVG animation controller, speaking mode, or PNG mode
     if (animCtrl == null ||
         animCtrl.mode == AnimationMode.speaking ||
-        !animCtrl.isRunning) {
+        !animCtrl.isRunning ||
+        widget.visemeSet.isPng) {
       return _svgCache[viseme] ?? _svgCache['sil'];
     }
 
-    // Apply transforms by modifying the SVG string.
+    // SVG animation: apply transforms by modifying the SVG string.
     // Quantize transform values to reduce re-parses (~10 updates/sec instead of 60).
     final transforms = animCtrl.transforms;
     final cacheKey = '$viseme|${transforms.entries.map((e) =>
@@ -227,13 +273,19 @@ class _VoxhelmAvatarState extends State<VoxhelmAvatar> {
   @override
   Widget build(BuildContext context) {
     final viseme = widget.controller.currentViseme;
-    final svgWidget = _getSvgWidget(viseme);
+    final visemeWidget = _getVisemeWidget(viseme);
+
+    // SVG eyelid overlay only applies to SVG mode — PNG heads have their
+    // own blink.png frame and Veo animation frames include natural blinks.
+    final showBlinkOverlay = widget.blinkController != null &&
+        widget.blinkController!.eyeClosedness > 0 &&
+        widget.visemeSet.isSvg &&
+        !(widget.animationFrameController?.currentFrameUrl != null);
 
     Widget child = Stack(
       children: [
-        if (svgWidget != null) svgWidget,
-        if (widget.blinkController != null &&
-            widget.blinkController!.eyeClosedness > 0)
+        if (visemeWidget != null) visemeWidget,
+        if (showBlinkOverlay)
           CustomPaint(
             size: Size(widget.size, widget.size),
             painter: _BlinkPainter(
