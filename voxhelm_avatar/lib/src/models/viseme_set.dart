@@ -8,24 +8,44 @@ const kAllVisemes = [
   'nn', 'RR', 'aa', 'E', 'I', 'O', 'U',
 ];
 
-/// A set of 15 SVG strings (one per viseme) representing a character's face.
+/// Asset mode: SVG strings or PNG URLs.
+enum VisemeMode { svg, png }
+
+/// A set of 15 viseme assets representing a character's face.
+///
+/// Supports two modes:
+/// - [VisemeMode.svg]: assets are raw SVG strings (rendered with flutter_svg)
+/// - [VisemeMode.png]: assets are image URLs (rendered with Image.network)
 class VisemeSet {
-  /// Map of viseme key → SVG string content.
-  final Map<String, String> svgs;
+  /// Map of viseme key → asset (SVG string or URL).
+  final Map<String, String> assets;
 
-  const VisemeSet(this.svgs);
+  /// The asset mode.
+  final VisemeMode mode;
 
-  /// Get the SVG for a viseme, falling back to 'sil' if not found.
-  String operator [](String viseme) => svgs[viseme] ?? svgs['sil'] ?? '';
+  const VisemeSet(this.assets, {this.mode = VisemeMode.svg});
+
+  /// Legacy accessor — returns the SVG/URL map.
+  Map<String, String> get svgs => assets;
+
+  /// Get the asset for a viseme, falling back to 'sil' if not found.
+  String operator [](String viseme) => assets[viseme] ?? assets['sil'] ?? '';
 
   /// Whether all 15 visemes are present.
-  bool get isComplete => svgs.length >= 15;
+  bool get isComplete => assets.length >= 15;
 
   /// Number of loaded visemes.
-  int get count => svgs.length;
+  int get count => assets.length;
+
+  /// Whether this is an SVG set.
+  bool get isSvg => mode == VisemeMode.svg;
+
+  /// Whether this is a PNG/image URL set.
+  bool get isPng => mode == VisemeMode.png;
 
   /// Create from a raw map of viseme key → SVG string.
-  factory VisemeSet.fromMap(Map<String, String> svgMap) => VisemeSet(svgMap);
+  factory VisemeSet.fromMap(Map<String, String> svgMap) =>
+      VisemeSet(svgMap, mode: VisemeMode.svg);
 
   /// Load from Flutter asset bundle.
   ///
@@ -47,7 +67,7 @@ class VisemeSet {
       }
     }
 
-    return VisemeSet(svgs);
+    return VisemeSet(svgs, mode: VisemeMode.svg);
   }
 
   /// Fetch from a remote URL that returns a JSON map of {viseme: svgString}.
@@ -60,7 +80,7 @@ class VisemeSet {
     }
     final data = jsonDecode(response.body) as Map<String, dynamic>;
     final svgs = data.map((k, v) => MapEntry(k, v as String));
-    return VisemeSet(svgs);
+    return VisemeSet(svgs, mode: VisemeMode.svg);
   }
 
   /// Fetch from a base URL that serves individual SVG files.
@@ -82,6 +102,44 @@ class VisemeSet {
       }
     }
 
-    return VisemeSet(svgs);
+    return VisemeSet(svgs, mode: VisemeMode.svg);
+  }
+
+  /// Create a PNG set from a CDN base URL.
+  ///
+  /// Doesn't download the images — just builds URL references that
+  /// [Image.network] will fetch on demand.
+  ///
+  /// E.g., `fromCdnUrl('https://avatars.voxhelm.com/heads/young_woman')`
+  static VisemeSet fromCdnUrl(String baseUrl, {String ext = 'png'}) {
+    final base = baseUrl.endsWith('/') ? baseUrl : '$baseUrl/';
+    final urls = <String, String>{};
+    for (final v in kAllVisemes) {
+      urls[v] = '$base$v.$ext';
+    }
+    return VisemeSet(urls, mode: VisemeMode.png);
+  }
+
+  /// Load from a manifest URL, returning all available heads.
+  ///
+  /// The manifest is a JSON file at `{cdnBase}/manifest.json` with:
+  /// ```json
+  /// {"heads": [{"name": "young_woman", "ext": "png", ...}, ...]}
+  /// ```
+  static Future<Map<String, VisemeSet>> fromManifest(String cdnBase) async {
+    final base = cdnBase.endsWith('/') ? cdnBase : '$cdnBase/';
+    final response = await http.get(Uri.parse('${base}manifest.json'));
+    if (response.statusCode != 200) {
+      throw Exception('Failed to load manifest: ${response.statusCode}');
+    }
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    final heads = data['heads'] as List;
+    final result = <String, VisemeSet>{};
+    for (final h in heads) {
+      final name = h['name'] as String;
+      final ext = h['ext'] as String? ?? 'png';
+      result[name] = VisemeSet.fromCdnUrl('$base$name', ext: ext);
+    }
+    return result;
   }
 }
